@@ -13,7 +13,9 @@ Do not reread all docs for every small task.
 
 ## Architecture rules
 - Monorepo using pnpm workspaces.
+- Node runtime: Target Node LTS (v20 or v22) for reliable Expo/Metro and build tooling compatibility.
 - `apps/client`: one Expo Router app for Android, iOS and web.
+- `apps/client` Metro config must watch monorepo root and workspace packages (`packages/*`) for pnpm compatibility.
 - `apps/api`: Fastify API; all database access stays server-side.
 - `packages/db`: Drizzle schema, migrations and DB client.
 - `packages/contracts`: Zod request/response schemas and shared API types.
@@ -29,7 +31,7 @@ Do not reread all docs for every small task.
 - Validate all untrusted input with Zod.
 - Use Drizzle parameterized queries and migrations.
 - Every user-owned query filters by authenticated `userId`; never trust a client-supplied owner ID.
-- Use platform adapters for native SQLite and web IndexedDB; do not import native-only modules into web bundles.
+- Use platform adapters (`.native.ts` and `.web.ts`) for native SQLite and web IndexedDB; do not import native-only modules into web bundles.
 - Keep UI platform-specific when necessary, while sharing contracts and business logic.
 - Use accessible responsive UI and explicit loading/empty/error states.
 - Store instants as `timestamptz`; diary day as SQL `date`; store user IANA timezone.
