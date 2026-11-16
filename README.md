@@ -31,9 +31,10 @@ MyDay is a private, cross-device diary and personal memory platform designed to 
 
 ## Read first
 1. `AGENTS.md`
-2. `docs/SYSTEM_REQUIREMENTS_AND_SETUP.md` (System checks & manual setup checklist)
-3. `docs/IMPLEMENTATION_GUIDE.md` (Step-by-step roadmap from Phase 0 to 10)
-4. `docs/DEPLOYMENT_GUIDE.md` (Fastify Web Service + Google Play Store guide)
+2. `docs/SYSTEM_DESIGN_REVIEW.md` (System design scoring & architectural evaluation)
+3. `docs/SYSTEM_REQUIREMENTS_AND_SETUP.md` (System checks & manual setup checklist)
+4. `docs/IMPLEMENTATION_GUIDE.md` (Step-by-step roadmap from Phase 0 to 10)
+5. `docs/DEPLOYMENT_GUIDE.md` (Fastify Web Service + Google Play Store guide)
 5. `docs/PRODUCT_SPEC.md`
 6. `docs/ARCHITECTURE.md`
 7. `docs/DATABASE_SCHEMA.md`

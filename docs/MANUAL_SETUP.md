@@ -1,8 +1,6 @@
 # Manual Setup — Follow Sequentially
 
 This document lists the work you do manually and the work delegated to the coding agent.
-For a complete checklist and one-click environment verification script, see [`docs/SYSTEM_REQUIREMENTS_AND_SETUP.md`](SYSTEM_REQUIREMENTS_AND_SETUP.md).
-For production web and Play Store instructions, see [`docs/DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md).
 
 ## Step 1 — Install local tools
 Install:
