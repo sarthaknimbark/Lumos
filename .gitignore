@@ -11,3 +11,15 @@ coverage/
 .DS_Store
 android/
 ios/
+
+# Android signing keys, bundles & service accounts (NEVER COMMIT)
+*.keystore
+*.jks
+*.aab
+*.apk
+google-service-account.json
+
+# Local sqlite databases
+*.db
+*.sqlite
+

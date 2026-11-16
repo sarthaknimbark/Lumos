@@ -31,12 +31,15 @@ MyDay is a private, cross-device diary and personal memory platform designed to 
 
 ## Read first
 1. `AGENTS.md`
-2. `docs/PRODUCT_SPEC.md`
-3. `docs/ARCHITECTURE.md`
-4. `docs/DATABASE_SCHEMA.md`
-5. `docs/SECURITY.md`
-6. `docs/MANUAL_SETUP.md`
-7. `PROMPTS.md`
+2. `docs/SYSTEM_REQUIREMENTS_AND_SETUP.md` (System checks & manual setup checklist)
+3. `docs/IMPLEMENTATION_GUIDE.md` (Step-by-step roadmap from Phase 0 to 10)
+4. `docs/DEPLOYMENT_GUIDE.md` (Fastify Web Service + Google Play Store guide)
+5. `docs/PRODUCT_SPEC.md`
+6. `docs/ARCHITECTURE.md`
+7. `docs/DATABASE_SCHEMA.md`
+8. `docs/SECURITY.md`
+9. `docs/MANUAL_SETUP.md`
+10. `PROMPTS.md`
 
 ## Important
 This ZIP is a documentation/configuration starter, not a finished application. Use the prompts to have your coding agent scaffold and implement the app phase by phase. Do not ask it to generate the whole product in one shot.
