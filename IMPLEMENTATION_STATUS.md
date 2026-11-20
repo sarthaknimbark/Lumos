@@ -1,12 +1,13 @@
 # Implementation Status
 
-Current status: Phase 2 complete (schema, SQL migrations, typed DB client, and seed ready; live database connection deferred to target machine). Ready for Phase 3.
+Current status: Phase 3 complete. Ready for Phase 4 (Authentication & account isolation).
 
 ## Phases
 - [x] 0 — Monorepo and tooling
 - [x] 1 — Expo universal UI shell (mock data)
 - [x] 2 — PostgreSQL + Drizzle persistence (schema, migrations & client ready; live migration deferred to target machine)
-- [ ] 3 — API modules and OpenAPI
+- [x] 3 — API modules, OpenAPI & Groq Free AI integration
+- [ ] 4 — Authentication and account isolation
 - [ ] 4 — Authentication and account isolation
 - [ ] 5 — Journal, calendar, search, mood, tags
 - [ ] 6 — Native/web offline drafts and sync
@@ -23,7 +24,8 @@ Current status: Phase 2 complete (schema, SQL migrations, typed DB client, and s
 - Local database: Docker Compose
 - Cloud database: Neon
 - Monorepo: pnpm workspaces
-- API: REST `/api/v1` + OpenAPI
+- API: REST `/api/v1` + Fastify route validation
+- AI Provider: Groq Free API (zero paid AI dependencies; opt-in reflection assistance)
 - Offline: SQLite on native, IndexedDB on web
 - Google integrations: separate opt-in permissions
 
@@ -36,19 +38,10 @@ Current status: Phase 2 complete (schema, SQL migrations, typed DB client, and s
 - Built Settings Screen (`app/(tabs)/settings.tsx`): Profile card, JSON/Markdown data export preview, daily reminder switch, theme preference, and integration status cards.
 - Verified TypeScript strict check and Metro static web export for all 10 routes.
 
-- Phase 2: PostgreSQL schema, Drizzle Kit configuration, generated SQL migrations (`packages/db/drizzle/0000_military_brood.sql`), typed DB client, migration runner, and seed scripts implemented. Live database migration is deferred to the user's target machine where PostgreSQL / Neon will be provisioned.
+- Phase 2: PostgreSQL schema, Drizzle Kit configuration, generated SQL migrations (`packages/db/drizzle/0000_military_brood.sql`), typed DB client, migration runner, and seed scripts implemented. Live database migration is deferred to the target machine (`pnpm db:migrate`).
+- Phase 3: Fastify API foundation completed with full `/api/v1` route modules (`entries`, `tags`, `ai`), centralized error handling, custom request IDs, rate-limiting defaults, interactive Swagger UI (`/documentation`) and OpenAPI spec (`/api/v1/openapi.json`), Groq Free API integration (`llama-3.1-8b-instant`) with curated offline fallback prompts, and 11 passing automated integration tests.
 
 ## Blockers / decisions needed
-None. Live database migration can be executed anytime on the target machine via `pnpm db:migrate` and `pnpm db:seed`. Ready to proceed with Phase 3 (Fastify API modules & OpenAPI).
-
-
-What is Prepared for Your Target Machine:
-Drizzle Schema & Models: Fully defined in packages/db/src/schema.ts (users, journal_entries, entry_sections, tags, entry_tags, attachments, integration_connections).
-Ready-to-Run SQL Migrations: Generated in packages/db/drizzle/0000_military_brood.sql.
-One-Command Setup: Whenever you switch to your other machine or cloud database (Neon), you simply run:
-bash
-pnpm db:migrate
-pnpm db:seed
-Status: Updated IMPLEMENTATION_STATUS.md marking Phase 2 schema & tooling complete with live migration deferred.
+None. Ready to proceed with Phase 4 (Authentication & Google sign-in).
 
 Whenever you're ready, let me know to start Phase 3 (Fastify API modules, /api/v1 routes, and OpenAPI documentation).

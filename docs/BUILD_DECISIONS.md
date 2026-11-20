@@ -15,6 +15,7 @@ This document defines the architectural locks, dependency versions, monorepo res
 | **Contracts & Validation** | Zod v3.24+ | Shared request/response validation across Fastify and Expo client. |
 | **Database & ORM** | PostgreSQL 16 + Drizzle ORM v0.38+ | Light SQL wrapper, zero query engine bloat, typed schema migrations across local Docker and cloud Neon. |
 | **Authentication** | Better Auth (with Expo & Fastify plugins) | Modern session/token authentication with Google OAuth provider support, session cookies on web, and secure bearer headers on mobile. |
+| **AI Provider** | Groq Free API (`groq-sdk`) | Zero paid AI hard dependencies. Fast, free-tier Llama 3 models for optional reflection assistance, daily intention prompts, and summarization. |
 | **Offline Persistence** | Platform Adapters: Expo SQLite (native) / IndexedDB (web) | Clean separation via `.native.ts` and `.web.ts` preventing native crash in web bundle. |
 
 ---

@@ -10,6 +10,14 @@ const EnvSchema = z.object({
   DATABASE_URL: z.string().optional(),
   API_BASE_URL: z.string().default("http://localhost:4000"),
   APP_WEB_URL: z.string().default("http://localhost:8081"),
+  GROQ_API_KEY: z.string().optional(),
+  ENABLE_TEST_USER_BYPASS: z.coerce
+    .boolean()
+    .default(process.env.NODE_ENV !== "production"),
+  TEST_USER_ID: z
+    .string()
+    .uuid()
+    .default("00000000-0000-0000-0000-000000000001"),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
