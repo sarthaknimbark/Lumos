@@ -1,8 +1,11 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+import * as schema from "./schema.js";
+
+export * from "./schema.js";
 
 /**
- * Creates a Drizzle database instance from a connection URL
+ * Creates a typed Drizzle database instance from a connection URL
  */
 export function createDbClient(databaseUrl: string) {
   const queryClient = postgres(databaseUrl, {
@@ -10,9 +13,11 @@ export function createDbClient(databaseUrl: string) {
     idle_timeout: 20,
     connect_timeout: 10,
   });
-  const db = drizzle(queryClient);
+  const db = drizzle(queryClient, { schema });
   return { db, queryClient };
 }
+
+export type DbClient = ReturnType<typeof createDbClient>["db"];
 
 /**
  * Checks database connectivity

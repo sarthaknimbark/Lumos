@@ -1,11 +1,11 @@
 # Implementation Status
 
-Current status: Phase 1 complete. Ready for Phase 2.
+Current status: Phase 2 schema implemented; awaiting DB connection to execute migration.
 
 ## Phases
 - [x] 0 — Monorepo and tooling
 - [x] 1 — Expo universal UI shell (mock data)
-- [ ] 2 — PostgreSQL + Drizzle persistence
+- [ ] 2 — PostgreSQL + Drizzle persistence (schema & migrations generated)
 - [ ] 3 — API modules and OpenAPI
 - [ ] 4 — Authentication and account isolation
 - [ ] 5 — Journal, calendar, search, mood, tags
