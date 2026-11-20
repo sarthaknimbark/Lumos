@@ -7,6 +7,7 @@ const testEnv: Env = {
   HOST: "127.0.0.1",
   API_BASE_URL: "http://127.0.0.1:4001",
   APP_WEB_URL: "http://localhost:8081",
+  AUTH_SECRET: "test_secret_32_characters_minimum_ok",
   ENABLE_TEST_USER_BYPASS: true,
   TEST_USER_ID: "00000000-0000-0000-0000-000000000001",
 };
@@ -179,6 +180,127 @@ async function runTests() {
     const body = res.json();
     if (!body.error || body.error.code !== "NOT_FOUND") {
       throw new Error(`Expected NOT_FOUND error, got: ${JSON.stringify(body)}`);
+    }
+  });
+
+  // 11. Auth - GET /api/v1/auth/session returns 401 without session
+  await test("GET /api/v1/auth/session returns 401 without credentials", async () => {
+    // Temporarily disable bypass for this test by using production env
+    const prodApp = await buildApp({
+      ...testEnv,
+      NODE_ENV: "production",
+      ENABLE_TEST_USER_BYPASS: false,
+    });
+    await prodApp.ready();
+    const res = await prodApp.inject({
+      method: "GET",
+      url: "/api/v1/auth/session",
+    });
+    await prodApp.close();
+    if (res.statusCode !== 401) throw new Error(`Expected 401, got ${res.statusCode}`);
+  });
+
+  // 12. Cross-ownership: User A cannot read User B's entries
+  await test("Cross-ownership: User B cannot read User A's entries", async () => {
+    // First create an entry as User A (the default TEST_USER_ID)
+    const createRes = await app.inject({
+      method: "POST",
+      url: "/api/v1/entries",
+      payload: {
+        entryDate: "2024-11-11",
+        title: "User A's private entry",
+        body: "User A's secret diary notes.",
+        sections: [],
+      },
+    });
+    // Should succeed (or be a conflict if already created)
+    if (createRes.statusCode !== 201 && createRes.statusCode !== 409) {
+      throw new Error(`Entry creation failed: ${createRes.statusCode} ${createRes.body}`);
+    }
+    const entryId =
+      createRes.statusCode === 201
+        ? createRes.json().data.id
+        : null;
+
+    if (!entryId) {
+      // Skip ownership check if we got a conflict (entry exists from earlier test)
+      console.log("    (skipping ownership check — entry already exists from earlier test)");
+      return;
+    }
+
+    // Now try to read as User B (different UUID)
+    const userBId = "00000000-0000-0000-0000-000000000002";
+    const readRes = await app.inject({
+      method: "GET",
+      url: `/api/v1/entries/${entryId}`,
+      headers: { "x-test-user-id": userBId },
+    });
+    // Must be 404 (not 403 — we don't reveal existence to other users)
+    if (readRes.statusCode !== 404) {
+      throw new Error(
+        `Expected 404 for cross-owner read, got ${readRes.statusCode}: ${readRes.body}`
+      );
+    }
+  });
+
+  // 13. Cross-ownership: User B cannot update User A's entries
+  await test("Cross-ownership: User B cannot update User A's entries", async () => {
+    // Create entry as User A
+    const createRes = await app.inject({
+      method: "POST",
+      url: "/api/v1/entries",
+      payload: {
+        entryDate: "2024-11-12",
+        title: "User A entry for update test",
+        body: "User A's entry before update attempt.",
+        sections: [],
+      },
+    });
+    if (createRes.statusCode !== 201) {
+      throw new Error(`Failed to create entry for update test: ${createRes.statusCode} ${createRes.body}`);
+    }
+    const entry = createRes.json().data;
+    const entryId = entry.id;
+    const userBId = "00000000-0000-0000-0000-000000000002";
+    const updateRes = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/entries/${entryId}`,
+      headers: { "x-test-user-id": userBId },
+      payload: { title: "Hacked Title", baseRevision: entry.revision },
+    });
+    if (updateRes.statusCode !== 404) {
+      throw new Error(
+        `Expected 404 for cross-owner update, got ${updateRes.statusCode}`
+      );
+    }
+  });
+
+  // 14. Cross-ownership: User B cannot delete User A's entries
+  await test("Cross-ownership: User B cannot delete User A's entries", async () => {
+    const createRes = await app.inject({
+      method: "POST",
+      url: "/api/v1/entries",
+      payload: {
+        entryDate: "2024-11-13",
+        title: "User A entry for delete test",
+        body: "User A's entry before delete attempt.",
+        sections: [],
+      },
+    });
+    if (createRes.statusCode !== 201) {
+      throw new Error(`Failed to create entry for delete test: ${createRes.statusCode} ${createRes.body}`);
+    }
+    const entryId = createRes.json().data.id;
+    const userBId = "00000000-0000-0000-0000-000000000002";
+    const deleteRes = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/entries/${entryId}`,
+      headers: { "x-test-user-id": userBId },
+    });
+    if (deleteRes.statusCode !== 404) {
+      throw new Error(
+        `Expected 404 for cross-owner delete, got ${deleteRes.statusCode}`
+      );
     }
   });
 

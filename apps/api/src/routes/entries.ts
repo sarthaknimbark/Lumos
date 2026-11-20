@@ -1,4 +1,4 @@
-import { FastifyInstance } from "fastify";
+import { FastifyInstance, FastifyPluginOptions } from "fastify";
 import {
   CreateEntrySchema,
   ListEntriesQuerySchema,
@@ -8,8 +8,16 @@ import { entryStore } from "../services/entryStore.js";
 import { Env } from "../config.js";
 import { createAuthGuard } from "../middleware/auth.js";
 
-export async function entriesRoutes(app: FastifyInstance, env: Env) {
-  const authGuard = createAuthGuard(env);
+interface EntriesRoutesOptions extends FastifyPluginOptions {
+  env?: Env;
+  auth?: Parameters<typeof createAuthGuard>[1];
+}
+
+export async function entriesRoutes(app: FastifyInstance, opts: Env | EntriesRoutesOptions) {
+  // Support both legacy (env directly) and new ({ env, auth }) shapes
+  const env = "env" in opts && opts.env ? opts.env : (opts as Env);
+  const auth = "auth" in opts ? opts.auth : undefined;
+  const authGuard = createAuthGuard(env, auth);
 
   // GET /api/v1/entries - List user's entries
   app.get(

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export * from "./auth.js";
+
 /**
  * 1. System & Health
  */

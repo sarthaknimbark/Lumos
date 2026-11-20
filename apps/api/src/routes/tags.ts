@@ -1,4 +1,4 @@
-import { FastifyInstance } from "fastify";
+import { FastifyInstance, FastifyPluginOptions } from "fastify";
 import { CreateTagSchema, TagResponse } from "@myday/contracts";
 import { Env } from "../config.js";
 import { createAuthGuard } from "../middleware/auth.js";
@@ -27,8 +27,15 @@ const inMemoryTags: Map<string, TagResponse & { userId: string }> = new Map([
   ],
 ]);
 
-export async function tagsRoutes(app: FastifyInstance, env: Env) {
-  const authGuard = createAuthGuard(env);
+interface TagsRoutesOptions extends FastifyPluginOptions {
+  env?: Env;
+  auth?: Parameters<typeof createAuthGuard>[1];
+}
+
+export async function tagsRoutes(app: FastifyInstance, opts: Env | TagsRoutesOptions) {
+  const env = "env" in opts && opts.env ? opts.env : (opts as Env);
+  const auth = "auth" in opts ? opts.auth : undefined;
+  const authGuard = createAuthGuard(env, auth);
 
   app.get(
     "/api/v1/tags",

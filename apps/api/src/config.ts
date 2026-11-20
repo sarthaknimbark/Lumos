@@ -11,6 +11,14 @@ const EnvSchema = z.object({
   API_BASE_URL: z.string().default("http://localhost:4000"),
   APP_WEB_URL: z.string().default("http://localhost:8081"),
   GROQ_API_KEY: z.string().optional(),
+  // ── Authentication ───────────────────────────────────────────────────────
+  AUTH_SECRET: z
+    .string()
+    .min(32, "AUTH_SECRET must be at least 32 characters")
+    .default("dev_secret_change_this_in_production_min32chars"),
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  // ── Dev bypass ───────────────────────────────────────────────────────────
   ENABLE_TEST_USER_BYPASS: z.coerce
     .boolean()
     .default(process.env.NODE_ENV !== "production"),

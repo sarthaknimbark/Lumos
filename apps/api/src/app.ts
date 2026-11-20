@@ -1,11 +1,14 @@
 import Fastify, { FastifyError, FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
+import cookie from "@fastify/cookie";
 import rateLimit from "@fastify/rate-limit";
 import sensible from "@fastify/sensible";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { Env } from "./config.js";
+import { createAuth } from "./auth.js";
 import { aiRoutes } from "./routes/ai.js";
+import { authRoutes } from "./routes/auth.js";
 import { entriesRoutes } from "./routes/entries.js";
 import { healthRoutes } from "./routes/health.js";
 import { tagsRoutes } from "./routes/tags.js";
@@ -19,8 +22,16 @@ export async function buildApp(env: Env): Promise<FastifyInstance> {
     },
   });
 
+  // 0. Create Better Auth instance (shared across the app)
+  const auth = createAuth(env);
+
   // 1. Core plugins
   await app.register(sensible);
+  await app.register(cookie, {
+    // Cookie secret for signing (uses AUTH_SECRET)
+    secret: env.AUTH_SECRET,
+    parseOptions: {},
+  });
   await app.register(rateLimit, {
     max: 120,
     timeWindow: "1 minute",
@@ -60,6 +71,7 @@ export async function buildApp(env: Env): Promise<FastifyInstance> {
       ],
       tags: [
         { name: "System", description: "Health and readiness checks" },
+        { name: "Auth", description: "Authentication — email/password and Google OAuth" },
         { name: "Journal", description: "Daily diary entries and reflections" },
         { name: "Tags", description: "Normalized tag organization" },
         { name: "AI Assistant", description: "Groq Free API reflection assistance" },
@@ -122,9 +134,10 @@ export async function buildApp(env: Env): Promise<FastifyInstance> {
 
   // 4. Register Route Modules
   await app.register(healthRoutes, env);
-  await app.register(entriesRoutes, env);
-  await app.register(tagsRoutes, env);
-  await app.register(aiRoutes, env);
+  await app.register(authRoutes, { env, auth });
+  await app.register(entriesRoutes, { env, auth });
+  await app.register(tagsRoutes, { env, auth });
+  await app.register(aiRoutes, { env, auth });
 
   return app;
 }

@@ -1,14 +1,13 @@
 # Implementation Status
 
-Current status: Phase 3 complete. Ready for Phase 4 (Authentication & account isolation).
+Current status: Phase 4 complete. Ready for Phase 5 (Journal, calendar, search, mood, tags with database integration).
 
 ## Phases
 - [x] 0 — Monorepo and tooling
 - [x] 1 — Expo universal UI shell (mock data)
 - [x] 2 — PostgreSQL + Drizzle persistence (schema, migrations & client ready; live migration deferred to target machine)
 - [x] 3 — API modules, OpenAPI & Groq Free AI integration
-- [ ] 4 — Authentication and account isolation
-- [ ] 4 — Authentication and account isolation
+- [x] 4 — Authentication and account isolation (Better Auth + Google Sign-In structure + SecureStore)
 - [ ] 5 — Journal, calendar, search, mood, tags
 - [ ] 6 — Native/web offline drafts and sync
 - [ ] 7 — Google Drive backup and attachments
@@ -27,21 +26,38 @@ Current status: Phase 3 complete. Ready for Phase 4 (Authentication & account is
 - API: REST `/api/v1` + Fastify route validation
 - AI Provider: Groq Free API (zero paid AI dependencies; opt-in reflection assistance)
 - Offline: SQLite on native, IndexedDB on web
-- Google integrations: separate opt-in permissions
+- Auth: Better Auth (Email/Password always available + Google OAuth opt-in; identity scopes only)
+- Secure token storage: Expo SecureStore on native, HTTP-only cookies on web
+- Cross-user ownership: Strict user isolation — unauthorized access to other user's records returns 404
 
 ## Latest completed work
 - Phase 1: Universal UI shell implemented with mock data.
-- Built responsive Tab Navigation (`apps/client/app/(tabs)/_layout.tsx`) for Today, Timeline, Search, and Settings.
-- Built Today Dashboard & Entry Editor (`app/(tabs)/index.tsx`): Headline, journal text input, Mood (1-5) and Energy (1-5) selectors, structured reflections (Highlights, Gratitude, Learned, Tomorrow Intention), tag selector, custom tag adding, favorite toggle, and save/draft status indicator.
-- Built Timeline Screen (`app/(tabs)/timeline.tsx`): Chronological cards, mood badges, expand/collapse reflection details, and favorite filtering.
-- Built Search Screen (`app/(tabs)/search.tsx`): Live text search, tag chips filter, mood filter pills, and instant results count.
-- Built Settings Screen (`app/(tabs)/settings.tsx`): Profile card, JSON/Markdown data export preview, daily reminder switch, theme preference, and integration status cards.
-- Verified TypeScript strict check and Metro static web export for all 10 routes.
+- Phase 2: PostgreSQL schema, Drizzle Kit configuration, generated SQL migrations (`packages/db/drizzle/0000_military_brood.sql`), typed DB client, migration runner, and seed scripts implemented. Live database migration is deferred to target machine (`pnpm db:migrate`).
+- Phase 3: Fastify API foundation completed with full `/api/v1` route modules (`entries`, `tags`, `ai`), centralized error handling, custom request IDs, rate-limiting defaults, interactive Swagger UI (`/documentation`) and OpenAPI spec (`/api/v1/openapi.json`), Groq Free API integration (`llama-3.1-8b-instant`) with curated offline fallback prompts, and passing automated integration tests.
+- Phase 4: Authentication & account isolation:
+  - Better Auth configured in `apps/api/src/auth.ts` with Drizzle adapter and Fastify integration.
+  - Better Auth route delegation mounted under `/api/auth/*` and `/api/v1/auth/session`.
+  - Auth guard (`apps/api/src/middleware/auth.ts`) enforcing authenticated `userId`, with dev-only header bypass (`x-test-user-id`) for development/tests.
+  - Client auth client configured (`apps/client/src/auth/client.ts`) with `@better-auth/expo` and platform-specific storage adapters (`storage.native.ts` with `expo-secure-store`, `storage.web.ts` with `localStorage`).
+  - Added Auth DTO contracts in `packages/contracts/src/auth.ts`.
+  - Added cross-user ownership isolation tests in `apps/api/test/api.test.ts` (cross-user read/update/delete returns 404). All 15 integration tests pass.
+  - Full TypeScript typechecks clean across `packages/contracts`, `packages/db`, `apps/api`, and `apps/client`.
 
-- Phase 2: PostgreSQL schema, Drizzle Kit configuration, generated SQL migrations (`packages/db/drizzle/0000_military_brood.sql`), typed DB client, migration runner, and seed scripts implemented. Live database migration is deferred to the target machine (`pnpm db:migrate`).
-- Phase 3: Fastify API foundation completed with full `/api/v1` route modules (`entries`, `tags`, `ai`), centralized error handling, custom request IDs, rate-limiting defaults, interactive Swagger UI (`/documentation`) and OpenAPI spec (`/api/v1/openapi.json`), Groq Free API integration (`llama-3.1-8b-instant`) with curated offline fallback prompts, and 11 passing automated integration tests.
+## Manual Configuration Needed for Live Auth
 
-## Blockers / decisions needed
-None. Ready to proceed with Phase 4 (Authentication & Google sign-in).
-
-Whenever you're ready, let me know to start Phase 3 (Fastify API modules, /api/v1 routes, and OpenAPI documentation).
+To enable full production authentication when ready:
+1. **`AUTH_SECRET`**:
+   - In `apps/api/.env`, generate and set a high-entropy secret (min 32 characters):
+     `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+2. **`DATABASE_URL`**:
+   - When connecting PostgreSQL on the target machine:
+     `DATABASE_URL=postgresql://user:password@host:5432/myday`
+   - Run migrations: `pnpm db:migrate`
+3. **Google OAuth (Optional for Google Sign-In)**:
+   - Go to Google Cloud Console (https://console.cloud.google.com).
+   - Create OAuth 2.0 Credentials (Web application).
+   - Authorized redirect URI: `http://localhost:4000/api/auth/callback/google` (and production API URL).
+   - Set in `apps/api/.env`:
+     - `GOOGLE_CLIENT_ID=your_google_client_id`
+     - `GOOGLE_CLIENT_SECRET=your_google_client_secret`
+   - *Note*: Only identity scopes (`openid`, `email`, `profile`) are used. Drive and Calendar permissions are requested separately in later phases.
