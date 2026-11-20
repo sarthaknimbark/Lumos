@@ -1,11 +1,11 @@
 # Implementation Status
 
-Current status: Phase 2 schema implemented; awaiting DB connection to execute migration.
+Current status: Phase 2 complete (schema, SQL migrations, typed DB client, and seed ready; live database connection deferred to target machine). Ready for Phase 3.
 
 ## Phases
 - [x] 0 — Monorepo and tooling
 - [x] 1 — Expo universal UI shell (mock data)
-- [ ] 2 — PostgreSQL + Drizzle persistence (schema & migrations generated)
+- [x] 2 — PostgreSQL + Drizzle persistence (schema, migrations & client ready; live migration deferred to target machine)
 - [ ] 3 — API modules and OpenAPI
 - [ ] 4 — Authentication and account isolation
 - [ ] 5 — Journal, calendar, search, mood, tags
@@ -36,5 +36,7 @@ Current status: Phase 2 schema implemented; awaiting DB connection to execute mi
 - Built Settings Screen (`app/(tabs)/settings.tsx`): Profile card, JSON/Markdown data export preview, daily reminder switch, theme preference, and integration status cards.
 - Verified TypeScript strict check and Metro static web export for all 10 routes.
 
+- Phase 2: PostgreSQL schema, Drizzle Kit configuration, generated SQL migrations (`packages/db/drizzle/0000_military_brood.sql`), typed DB client, migration runner, and seed scripts implemented. Live database migration is deferred to the user's target machine where PostgreSQL / Neon will be provisioned.
+
 ## Blockers / decisions needed
-None. Ready to begin Phase 2 (PostgreSQL + Drizzle persistence).
+None. Live database migration can be executed anytime on the target machine via `pnpm db:migrate` and `pnpm db:seed`. Ready to proceed with Phase 3 (Fastify API modules & OpenAPI).
