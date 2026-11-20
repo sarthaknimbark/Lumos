@@ -40,6 +40,12 @@ if (-not (Test-Path "apps\api\.env")) {
 } else {
     Write-Host "  apps\api\.env already exists (preserving existing settings)" -ForegroundColor Gray
 }
+if (-not (Test-Path "apps\client\.env")) {
+    Set-Content -Path "apps\client\.env" -Value "EXPO_PUBLIC_API_URL=http://localhost:4000"
+    Write-Host "  Created apps\client\.env with EXPO_PUBLIC_API_URL=http://localhost:4000" -ForegroundColor Green
+} else {
+    Write-Host "  apps\client\.env already exists (preserving existing settings)" -ForegroundColor Gray
+}
 
 # 4. Install all packages
 Write-Host "[4/6] Installing all packages across monorepo..." -ForegroundColor Cyan

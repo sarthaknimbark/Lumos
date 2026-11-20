@@ -345,6 +345,44 @@ async function runTests() {
     }
   });
 
+  // 15. Offline sync: Idempotency-Key prevents duplicate creation on replay
+  await test("POST /api/v1/entries with Idempotency-Key returns cached entry on replay", async () => {
+    const idempotencyKey = "55555555-5555-4555-a555-555555555555";
+    const payload = {
+      entryDate: "2025-05-05",
+      title: "Idempotent Entry",
+      body: "Testing offline queue replay protection.",
+      sections: [],
+    };
+
+    // First attempt: creates entry
+    const res1 = await app.inject({
+      method: "POST",
+      url: "/api/v1/entries",
+      headers: { "x-idempotency-key": idempotencyKey },
+      payload,
+    });
+    if (res1.statusCode !== 201) {
+      throw new Error(`Expected 201 on first attempt, got ${res1.statusCode}`);
+    }
+    const firstId = res1.json().data.id;
+
+    // Second attempt with SAME idempotency key (simulating offline reconnect replay)
+    const res2 = await app.inject({
+      method: "POST",
+      url: "/api/v1/entries",
+      headers: { "x-idempotency-key": idempotencyKey },
+      payload,
+    });
+    if (res2.statusCode !== 201) {
+      throw new Error(`Expected 201 on idempotent replay, got ${res2.statusCode}`);
+    }
+    const secondId = res2.json().data.id;
+    if (firstId !== secondId) {
+      throw new Error(`Expected identical entry ID (${firstId}), got ${secondId}`);
+    }
+  });
+
   await app.close();
 
   console.log(`\nResults: ${passed} passed, ${failed} failed.\n`);

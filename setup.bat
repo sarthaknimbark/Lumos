@@ -28,6 +28,11 @@ if not exist apps\api\.env (
     )
 )
 
+if not exist apps\client\.env (
+    echo EXPO_PUBLIC_API_URL=http://localhost:4000 > apps\client\.env
+    echo Created apps\client\.env with default API URL
+)
+
 echo Installing all packages across monorepo...
 call pnpm install
 

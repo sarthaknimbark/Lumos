@@ -8,9 +8,22 @@ import {
   Text,
   View,
 } from "react-native";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { api } from "../../src/api/client";
-import { MOOD_OPTIONS, PAST_ENTRIES_MOCK } from "../../src/mockData";
+import { PAST_ENTRIES_MOCK } from "../../src/mockData";
+import { THEME, THEME_MOODS } from "../../src/theme";
 import { JournalEntryResponse } from "@myday/contracts";
+
+function formatDisplayDate(dateStr: string) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  return date.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
 
 export default function TimelineScreen() {
   const [entries, setEntries] = useState<JournalEntryResponse[]>([]);
@@ -73,66 +86,112 @@ export default function TimelineScreen() {
       style={styles.container}
       contentContainerStyle={styles.contentContainer}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={THEME.colors.accent}
+        />
       }
     >
       {/* Top Filter Bar */}
       <View style={styles.filterRow}>
-        <Text style={styles.countText}>
-          {entries.length} {entries.length === 1 ? "Memory" : "Memories"}
-        </Text>
+        <View style={styles.countBadge}>
+          <Text style={styles.countText}>
+            {entries.length} {entries.length === 1 ? "MEMORY" : "MEMORIES"}
+          </Text>
+        </View>
+
         <Pressable
-          style={[styles.favoriteFilterPill, onlyFavorites && styles.favoriteFilterPillActive]}
+          style={[
+            styles.favoriteFilterPill,
+            onlyFavorites && styles.favoriteFilterPillActive,
+          ]}
           onPress={() => setOnlyFavorites((p) => !p)}
         >
-          <Text style={[styles.favoriteFilterText, onlyFavorites && styles.favoriteFilterTextActive]}>
-            ★ Favorites Only
+          <Ionicons
+            name={onlyFavorites ? "heart" : "heart-outline"}
+            size={14}
+            color={onlyFavorites ? THEME.colors.rose : THEME.colors.textSecondary}
+            style={{ marginRight: 5 }}
+          />
+          <Text
+            style={[
+              styles.favoriteFilterText,
+              onlyFavorites && styles.favoriteFilterTextActive,
+            ]}
+          >
+            Favorites
           </Text>
         </Pressable>
       </View>
 
       {loading ? (
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#6366f1" />
+          <ActivityIndicator size="small" color={THEME.colors.accent} />
           <Text style={styles.loadingText}>Loading timeline...</Text>
         </View>
       ) : entries.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyIcon}>📖</Text>
+          <Ionicons name="journal-outline" size={38} color={THEME.colors.textTertiary} />
           <Text style={styles.emptyTitle}>No memories found</Text>
           <Text style={styles.emptySubtitle}>
             {onlyFavorites
-              ? "Try toggling the favorites filter off."
-              : "Write your first entry in the Today tab!"}
+              ? "No favorite entries yet. Star an entry to save it here."
+              : "Capture your first reflection in the Today tab!"}
           </Text>
         </View>
       ) : (
         entries.map((item) => {
-          const moodOpt = MOOD_OPTIONS.find((m) => m.level === item.mood);
+          const moodDef = THEME_MOODS.find((m) => m.level === item.mood);
           const isExpanded = selectedEntryId === item.id;
 
           return (
             <Pressable
               key={item.id}
-              style={styles.card}
+              style={[styles.card, isExpanded && styles.cardExpanded]}
               onPress={() => setSelectedEntryId(isExpanded ? null : item.id)}
             >
               <View style={styles.cardHeader}>
-                <View>
-                  <Text style={styles.dateLabel}>{item.entryDate}</Text>
-                  {item.title ? <Text style={styles.titleText}>{item.title}</Text> : null}
+                <View style={styles.cardHeaderLeft}>
+                  <Text style={styles.dateLabel}>{formatDisplayDate(item.entryDate)}</Text>
+                  {item.title ? (
+                    <Text style={styles.titleText}>{item.title}</Text>
+                  ) : null}
                 </View>
+
                 <View style={styles.badgeRow}>
-                  {item.isFavorite && <Text style={styles.starBadge}>★</Text>}
-                  {moodOpt && (
-                    <View style={styles.moodBadge}>
-                      <Text style={styles.moodEmoji}>{moodOpt.emoji}</Text>
+                  {item.isFavorite && (
+                    <Ionicons
+                      name="heart"
+                      size={16}
+                      color={THEME.colors.rose}
+                      style={{ marginRight: 6 }}
+                    />
+                  )}
+                  {moodDef && (
+                    <View
+                      style={[
+                        styles.moodBadge,
+                        { borderColor: moodDef.accentColor, backgroundColor: THEME.colors.surfaceSubtle },
+                      ]}
+                    >
+                      <Ionicons
+                        name={moodDef.iconFilled}
+                        size={13}
+                        color={moodDef.accentColor}
+                      />
+                      <Text style={[styles.moodLabel, { color: moodDef.accentColor }]}>
+                        {moodDef.label}
+                      </Text>
                     </View>
                   )}
                 </View>
               </View>
 
-              <Text style={styles.snippetText} numberOfLines={isExpanded ? undefined : 3}>
+              <Text
+                style={styles.snippetText}
+                numberOfLines={isExpanded ? undefined : 3}
+              >
                 {item.body}
               </Text>
 
@@ -141,17 +200,40 @@ export default function TimelineScreen() {
                 <View style={styles.expandedSections}>
                   {item.sections.map((sec) => (
                     <View key={sec.id} style={styles.sectionRow}>
-                      <Text style={styles.sectionHeading}>
-                        {sec.sectionType === "highlights"
-                          ? "🌟 Highlights"
-                          : sec.sectionType === "gratitude"
-                          ? "🙏 Gratitude"
-                          : sec.sectionType === "learned"
-                          ? "💡 Learned"
-                          : sec.sectionType === "tomorrow"
-                          ? "🎯 Tomorrow"
-                          : "Notes"}
-                      </Text>
+                      <View style={styles.sectionHeaderLine}>
+                        <Ionicons
+                          name={
+                            sec.sectionType === "highlights"
+                              ? "ribbon-outline"
+                              : sec.sectionType === "gratitude"
+                              ? "gift-outline"
+                              : sec.sectionType === "learned"
+                              ? "bulb-outline"
+                              : "flag-outline"
+                          }
+                          size={14}
+                          color={
+                            sec.sectionType === "highlights"
+                              ? THEME.colors.amber
+                              : sec.sectionType === "gratitude"
+                              ? THEME.colors.rose
+                              : sec.sectionType === "learned"
+                              ? THEME.colors.emerald
+                              : THEME.colors.sky
+                          }
+                        />
+                        <Text style={styles.sectionHeading}>
+                          {sec.sectionType === "highlights"
+                            ? "Highlights"
+                            : sec.sectionType === "gratitude"
+                            ? "Gratitude"
+                            : sec.sectionType === "learned"
+                            ? "Lessons"
+                            : sec.sectionType === "tomorrow"
+                            ? "Tomorrow"
+                            : "Section"}
+                        </Text>
+                      </View>
                       <Text style={styles.sectionContent}>{sec.content}</Text>
                     </View>
                   ))}
@@ -162,9 +244,9 @@ export default function TimelineScreen() {
               {item.tags.length > 0 && (
                 <View style={styles.tagsRow}>
                   {item.tags.map((t) => (
-                    <Text key={t} style={styles.tagText}>
-                      #{t}
-                    </Text>
+                    <View key={t} style={styles.tagBadge}>
+                      <Text style={styles.tagText}>#{t}</Text>
+                    </View>
                   ))}
                 </View>
               )}
@@ -179,157 +261,187 @@ export default function TimelineScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f9fafb",
+    backgroundColor: THEME.colors.background,
   },
   contentContainer: {
-    padding: 16,
-    paddingBottom: 40,
-    maxWidth: 720,
+    padding: THEME.spacing.lg,
+    paddingBottom: 50,
+    maxWidth: 740,
     width: "100%",
     alignSelf: "center",
-  },
-  centerContainer: {
-    paddingVertical: 50,
-    alignItems: "center",
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: "#6b7280",
   },
   filterRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: THEME.spacing.md,
+  },
+  countBadge: {
+    backgroundColor: THEME.colors.surface,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: THEME.radius.full,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
   },
   countText: {
-    fontSize: 15,
+    fontSize: 10,
     fontWeight: "700",
-    color: "#374151",
+    color: THEME.colors.textTertiary,
+    letterSpacing: 1.1,
   },
   favoriteFilterPill: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 6,
     paddingHorizontal: 12,
-    borderRadius: 20,
-    backgroundColor: "#e5e7eb",
+    borderRadius: THEME.radius.full,
+    backgroundColor: THEME.colors.surface,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
   },
   favoriteFilterPillActive: {
-    backgroundColor: "#fef3c7",
-    borderWidth: 1,
-    borderColor: "#f59e0b",
+    backgroundColor: THEME.colors.roseMuted,
+    borderColor: "rgba(244, 63, 94, 0.35)",
   },
   favoriteFilterText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#4b5563",
+    color: THEME.colors.textSecondary,
   },
   favoriteFilterTextActive: {
-    color: "#b45309",
+    color: THEME.colors.rose,
+  },
+  centerContainer: {
+    paddingVertical: 60,
+    alignItems: "center",
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 13,
+    color: THEME.colors.textSecondary,
+  },
+  emptyContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 80,
+    gap: 10,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: THEME.colors.textPrimary,
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    color: THEME.colors.textSecondary,
+    textAlign: "center",
+    maxWidth: 320,
+    lineHeight: 18,
   },
   card: {
-    backgroundColor: "#ffffff",
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 12,
+    backgroundColor: THEME.colors.surface,
+    borderRadius: THEME.radius.lg,
+    padding: THEME.spacing.lg,
+    marginBottom: THEME.spacing.md,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
+    borderColor: THEME.colors.border,
+  },
+  cardExpanded: {
+    borderColor: THEME.colors.accentBorder,
   },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 8,
+    marginBottom: 10,
+  },
+  cardHeaderLeft: {
+    flex: 1,
+    marginRight: 10,
   },
   dateLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
-    color: "#6b7280",
-    textTransform: "uppercase",
+    color: THEME.colors.textTertiary,
+    letterSpacing: 0.5,
+    marginBottom: 4,
   },
   titleText: {
     fontSize: 16,
-    fontWeight: "800",
-    color: "#111827",
-    marginTop: 2,
+    fontWeight: "700",
+    color: THEME.colors.textPrimary,
+    letterSpacing: -0.2,
   },
   badgeRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-  },
-  starBadge: {
-    fontSize: 16,
-    color: "#f59e0b",
   },
   moodBadge: {
-    backgroundColor: "#f3f4f6",
-    borderRadius: 12,
-    padding: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: THEME.radius.full,
+    borderWidth: 1,
   },
-  moodEmoji: {
-    fontSize: 16,
+  moodLabel: {
+    fontSize: 11,
+    fontWeight: "600",
   },
   snippetText: {
     fontSize: 14,
-    color: "#374151",
-    lineHeight: 20,
+    lineHeight: 21,
+    color: THEME.colors.textSecondary,
   },
   expandedSections: {
-    marginTop: 12,
+    marginTop: 14,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: "#f3f4f6",
-    gap: 8,
+    borderTopColor: THEME.colors.borderSubtle,
+    gap: 10,
   },
   sectionRow: {
-    backgroundColor: "#f9fafb",
-    padding: 8,
-    borderRadius: 8,
+    backgroundColor: THEME.colors.surfaceSubtle,
+    borderRadius: THEME.radius.md,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: THEME.colors.borderSubtle,
+  },
+  sectionHeaderLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 4,
   },
   sectionHeading: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
-    color: "#4f46e5",
-    marginBottom: 2,
+    color: THEME.colors.textPrimary,
   },
   sectionContent: {
     fontSize: 13,
-    color: "#1f2937",
     lineHeight: 18,
+    color: THEME.colors.textSecondary,
   },
   tagsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 6,
-    marginTop: 10,
+    marginTop: 12,
+  },
+  tagBadge: {
+    backgroundColor: THEME.colors.surfaceSubtle,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: THEME.radius.full,
+    borderWidth: 1,
+    borderColor: THEME.colors.borderSubtle,
   },
   tagText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#6366f1",
-  },
-  emptyContainer: {
-    paddingVertical: 60,
-    alignItems: "center",
-  },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 12,
-  },
-  emptyTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 4,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: "#6b7280",
+    fontSize: 11,
+    color: THEME.colors.textTertiary,
+    fontWeight: "500",
   },
 });

@@ -1,17 +1,23 @@
 import { Tabs } from "expo-router";
 import React from "react";
-import { Platform, StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { THEME } from "../../src/theme";
 
 interface TabIconProps {
-  emoji: string;
   focused: boolean;
-  label: string;
+  outlineName: keyof typeof Ionicons.glyphMap;
+  filledName: keyof typeof Ionicons.glyphMap;
 }
 
-function TabIcon({ emoji, focused }: TabIconProps) {
+function TabIcon({ focused, outlineName, filledName }: TabIconProps) {
   return (
     <View style={[styles.iconContainer, focused && styles.iconFocused]}>
-      <Text style={styles.iconEmoji}>{emoji}</Text>
+      <Ionicons
+        name={focused ? filledName : outlineName}
+        size={21}
+        color={focused ? THEME.colors.accent : THEME.colors.textSecondary}
+      />
     </View>
   );
 }
@@ -22,30 +28,33 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: true,
         headerStyle: {
-          backgroundColor: "#ffffff",
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 1 },
-          shadowOpacity: 0.05,
-          shadowRadius: 2,
-          elevation: 1,
+          backgroundColor: THEME.colors.background,
+          borderBottomWidth: 1,
+          borderBottomColor: THEME.colors.border,
+          shadowColor: "transparent",
+          elevation: 0,
         },
         headerTitleStyle: {
-          fontSize: 18,
-          fontWeight: "700",
-          color: "#0f172a",
+          fontSize: 17,
+          fontWeight: "600",
+          color: THEME.colors.textPrimary,
+          letterSpacing: -0.2,
         },
-        tabBarActiveTintColor: "#0284c7",
-        tabBarInactiveTintColor: "#64748b",
+        tabBarActiveTintColor: THEME.colors.accent,
+        tabBarInactiveTintColor: THEME.colors.textSecondary,
         tabBarStyle: {
-          backgroundColor: "#ffffff",
-          borderTopColor: "#e2e8f0",
-          height: Platform.OS === "ios" ? 88 : 64,
+          backgroundColor: THEME.colors.background,
+          borderTopWidth: 1,
+          borderTopColor: THEME.colors.border,
+          height: Platform.OS === "ios" ? 86 : 64,
           paddingBottom: Platform.OS === "ios" ? 28 : 10,
           paddingTop: 8,
+          elevation: 0,
         },
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: "600",
+          letterSpacing: 0.2,
         },
       }}
     >
@@ -53,9 +62,13 @@ export default function TabLayout() {
         name="index"
         options={{
           title: "Today",
-          headerTitle: "Today's Journal",
+          headerTitle: "Today",
           tabBarIcon: ({ focused }) => (
-            <TabIcon emoji="☀️" focused={focused} label="Today" />
+            <TabIcon
+              focused={focused}
+              outlineName="sunny-outline"
+              filledName="sunny"
+            />
           ),
         }}
       />
@@ -63,9 +76,13 @@ export default function TabLayout() {
         name="timeline"
         options={{
           title: "Timeline",
-          headerTitle: "Memories & Timeline",
+          headerTitle: "Timeline",
           tabBarIcon: ({ focused }) => (
-            <TabIcon emoji="📅" focused={focused} label="Timeline" />
+            <TabIcon
+              focused={focused}
+              outlineName="calendar-outline"
+              filledName="calendar"
+            />
           ),
         }}
       />
@@ -73,9 +90,13 @@ export default function TabLayout() {
         name="search"
         options={{
           title: "Search",
-          headerTitle: "Search Entries",
+          headerTitle: "Search",
           tabBarIcon: ({ focused }) => (
-            <TabIcon emoji="🔍" focused={focused} label="Search" />
+            <TabIcon
+              focused={focused}
+              outlineName="search-outline"
+              filledName="search"
+            />
           ),
         }}
       />
@@ -83,9 +104,13 @@ export default function TabLayout() {
         name="settings"
         options={{
           title: "Settings",
-          headerTitle: "Settings & Backup",
+          headerTitle: "Settings",
           tabBarIcon: ({ focused }) => (
-            <TabIcon emoji="⚙️" focused={focused} label="Settings" />
+            <TabIcon
+              focused={focused}
+              outlineName="settings-outline"
+              filledName="settings"
+            />
           ),
         }}
       />
@@ -97,14 +122,11 @@ const styles = StyleSheet.create({
   iconContainer: {
     alignItems: "center",
     justifyContent: "center",
-    width: 32,
+    width: 36,
     height: 32,
-    borderRadius: 8,
+    borderRadius: THEME.radius.md,
   },
   iconFocused: {
-    backgroundColor: "#e0f2fe",
-  },
-  iconEmoji: {
-    fontSize: 18,
+    backgroundColor: THEME.colors.accentMuted,
   },
 });

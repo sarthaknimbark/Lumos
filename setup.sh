@@ -37,6 +37,12 @@ if [ ! -f "apps/api/.env" ]; then
 else
     echo "  apps/api/.env already exists (preserving existing settings)"
 fi
+if [ ! -f "apps/client/.env" ]; then
+    echo "EXPO_PUBLIC_API_URL=http://localhost:4000" > apps/client/.env
+    echo "  Created apps/client/.env with EXPO_PUBLIC_API_URL=http://localhost:4000"
+else
+    echo "  apps/client/.env already exists (preserving existing settings)"
+fi
 
 # 4. Install all packages
 echo "[4/6] Installing all packages across monorepo..."

@@ -1,6 +1,6 @@
 # Implementation Status
 
-Current status: Phase 5 complete. Ready for Phase 6 (Native/web offline drafts and sync).
+Current status: Phase 6 complete. Ready for Phase 7 (Google Drive backup and attachments).
 
 ## Phases
 - [x] 0 — Monorepo and tooling
@@ -9,7 +9,7 @@ Current status: Phase 5 complete. Ready for Phase 6 (Native/web offline drafts a
 - [x] 3 — API modules, OpenAPI & Groq Free AI integration
 - [x] 4 — Authentication and account isolation (Better Auth + Google Sign-In structure + SecureStore)
 - [x] 5 — Journal, calendar, search, mood, tags (Drizzle persistence + universal client integration)
-- [ ] 6 — Native/web offline drafts and sync
+- [x] 6 — Native/web offline drafts and sync (IndexedDB on web, SecureStore on native, queue & conflict UI)
 - [ ] 7 — Google Drive backup and attachments
 - [ ] 8 — Google Calendar read-only integration
 - [ ] 9 — Export/import, security, testing
@@ -50,6 +50,13 @@ Current status: Phase 5 complete. Ready for Phase 6 (Native/web offline drafts a
   - Today screen updated with dynamic date navigation (`< Prev`, `Today`, `Next >`), Groq AI assistant trigger, mood/energy selectors, reflection sections, and live API saving.
   - Timeline and Search screens updated with live API querying, favorites filtering, tag filtering, and debounced text search.
   - 18 automated integration tests passing and 10 Expo static web routes cleanly exported.
+- Phase 6: Native/web offline drafts and sync:
+  - Defined offline sync contracts: `QueuedOperationSchema`, `SyncActionSchema`, `SyncStatusSchema`, `ConflictResolutionSchema` in `@myday/contracts`.
+  - Built platform offline storage adapters: `storage.web.ts` (IndexedDB with LocalStorage fallback) and `storage.native.ts` (hardware-backed encrypted native store) under unified `storage.ts`.
+  - Built `syncManager.ts` featuring local draft caching, idempotent queueing, background queue flush, exponential backoff, and conflict detection.
+  - Added backend idempotency replay protection (`x-idempotency-key`) in Fastify `/api/v1/entries` ensuring network retries return cached results without duplicate writes or conflicts.
+  - Integrated offline sync banner ("X offline changes waiting to sync", "Sync Now") and explicit Conflict Resolution Dialog in the Entry Editor ("Keep Server Version" vs "Overwrite with My Changes" — never silently overwrites).
+  - 19 automated integration tests passing and clean Metro web bundle exported.
 
 ## Manual Configuration Needed for Live Auth
 

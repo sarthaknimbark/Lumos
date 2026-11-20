@@ -153,3 +153,36 @@ export const AiReflectionResponseSchema = z.object({
   suggestedSections: z.array(z.string()).optional(),
 });
 export type AiReflectionResponse = z.infer<typeof AiReflectionResponseSchema>;
+
+/**
+ * 6. Offline Sync Models & DTOs
+ */
+export const SyncActionSchema = z.enum(["create", "update", "delete"]);
+export type SyncAction = z.infer<typeof SyncActionSchema>;
+
+export const SyncStatusSchema = z.enum(["pending", "syncing", "synced", "failed", "conflict"]);
+export type SyncStatus = z.infer<typeof SyncStatusSchema>;
+
+export const QueuedOperationSchema = z.object({
+  id: z.string().uuid(),
+  idempotencyKey: z.string().uuid(),
+  action: SyncActionSchema,
+  entryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  entryId: z.string().optional(),
+  baseRevision: z.number().int().optional(),
+  payload: z.unknown(),
+  status: SyncStatusSchema,
+  attempts: z.number().int().default(0),
+  lastError: z.string().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type QueuedOperation = z.infer<typeof QueuedOperationSchema>;
+
+export const ConflictResolutionSchema = z.object({
+  strategy: z.enum(["keep_server", "keep_local", "keep_both"]),
+  entryId: z.string(),
+  serverRevision: z.number().int(),
+  localPayload: z.unknown().optional(),
+});
+export type ConflictResolution = z.infer<typeof ConflictResolutionSchema>;

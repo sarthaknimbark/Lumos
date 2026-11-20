@@ -38,6 +38,12 @@ import { loadEnv } from "../config.js";
 // Global in-memory fallback store
 const inMemoryEntries: Map<string, JournalEntryResponse> = new Map();
 
+// In-memory idempotency cache for offline replay protection
+const idempotencyStore: Map<
+  string,
+  { entry: JournalEntryResponse; timestamp: number }
+> = new Map();
+
 // Seed initial in-memory entry for default dev user
 const devEntryId = "11111111-1111-1111-1111-111111111111";
 inMemoryEntries.set(devEntryId, {
@@ -319,8 +325,18 @@ export const entryService = {
    */
   async create(
     userId: string,
-    input: CreateEntryInput
+    input: CreateEntryInput,
+    idempotencyKey?: string
   ): Promise<JournalEntryResponse> {
+    // 1. Idempotency replay check
+    if (idempotencyKey) {
+      const cacheKey = `${userId}:${idempotencyKey}`;
+      const cached = idempotencyStore.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < 10 * 60 * 1000) {
+        return cached.entry;
+      }
+    }
+
     const db = getDbClient();
 
     if (db) {
@@ -451,6 +467,12 @@ export const entryService = {
     };
 
     inMemoryEntries.set(entryId, newEntry);
+    if (idempotencyKey) {
+      idempotencyStore.set(`${userId}:${idempotencyKey}`, {
+        entry: newEntry,
+        timestamp: Date.now(),
+      });
+    }
     return newEntry;
   },
 

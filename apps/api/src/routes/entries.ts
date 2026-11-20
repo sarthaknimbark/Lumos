@@ -117,7 +117,13 @@ export async function entriesRoutes(
       }
 
       try {
-        const created = await entryService.create(request.userId, parsed.data);
+        const idempotencyKey = (request.headers["x-idempotency-key"] ||
+          request.headers["idempotency-key"]) as string | undefined;
+        const created = await entryService.create(
+          request.userId,
+          parsed.data,
+          idempotencyKey
+        );
         return reply.status(201).send({ data: created });
       } catch (err: any) {
         if (err.code === "CONFLICT") {

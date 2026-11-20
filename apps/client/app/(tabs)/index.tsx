@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -10,9 +11,15 @@ import {
   TextInput,
   View,
 } from "react-native";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { api } from "../../src/api/client";
-import { ALL_TAGS, ENERGY_OPTIONS, MOOD_OPTIONS } from "../../src/mockData";
-import { JournalEntryResponse } from "@myday/contracts";
+import { offlineStorage } from "../../src/offline/storage";
+import { syncManager } from "../../src/offline/syncManager";
+import { ALL_TAGS } from "../../src/mockData";
+import { THEME } from "../../src/theme";
+import { MoodSelector } from "../../src/components/MoodSelector";
+import { EnergySelector } from "../../src/components/EnergySelector";
+import { TagPill } from "../../src/components/TagPill";
 
 function getTodayString() {
   const now = new Date();
@@ -30,6 +37,17 @@ function shiftDateString(dateStr: string, offsetDays: number) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function formatDisplayDate(dateStr: string) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  return date.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 export default function TodayScreen() {
@@ -56,15 +74,67 @@ export default function TodayScreen() {
   const [tomorrow, setTomorrow] = useState("");
 
   // AI Prompt State
-  const [aiLoading, setAiLoading] = useState(false);
   const [aiPrompt, setAiPrompt] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
-  // Load entry for currentDate
+  // Offline Sync State
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [showConflictModal, setShowConflictModal] = useState(false);
+
+  // Listen to offline sync queue changes
+  useEffect(() => {
+    const checkQueue = async () => {
+      try {
+        if (offlineStorage && typeof offlineStorage.getQueuedOperations === "function") {
+          const q = await offlineStorage.getQueuedOperations();
+          setPendingSyncCount(q?.length || 0);
+        }
+      } catch {
+        // Ignore check errors
+      }
+    };
+    checkQueue();
+    const interval = setInterval(checkQueue, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Fetch or load draft for currentDate
   useEffect(() => {
     let cancelled = false;
-    async function fetchEntry() {
-      setLoading(true);
-      setStatusMessage(null);
+    setLoading(true);
+    setStatusMessage(null);
+
+    async function loadData() {
+      // 1. Check local draft
+      try {
+        if (offlineStorage && typeof offlineStorage.getDraft === "function") {
+          const rawDraft = await offlineStorage.getDraft(currentDate);
+          if (rawDraft && !cancelled) {
+            const localDraft = rawDraft as any;
+            setTitle(localDraft.title || "");
+            setBody(localDraft.body || "");
+            setMood(localDraft.mood ?? null);
+            setEnergy(localDraft.energy ?? null);
+            setIsFavorite(localDraft.isFavorite ?? false);
+            setSelectedTags(localDraft.tags ?? []);
+            const h = localDraft.sections?.find((s: any) => s.sectionType === "highlights")?.content || "";
+            const g = localDraft.sections?.find((s: any) => s.sectionType === "gratitude")?.content || "";
+            const l = localDraft.sections?.find((s: any) => s.sectionType === "learned")?.content || "";
+            const t = localDraft.sections?.find((s: any) => s.sectionType === "tomorrow")?.content || "";
+            setHighlights(h);
+            setGratitude(g);
+            setLearlearned(l);
+            setTomorrow(t);
+            setSaveStatus("draft");
+            setLoading(false);
+            return;
+          }
+        }
+      } catch {
+        // Ignore local read errors
+      }
+
+      // 2. Fetch server version from API
       try {
         const found = await api.getEntryByDate(currentDate);
         if (cancelled) return;
@@ -78,7 +148,6 @@ export default function TodayScreen() {
           setIsFavorite(found.isFavorite);
           setSelectedTags(found.tags || []);
 
-          // Sections
           const h = found.sections.find((s) => s.sectionType === "highlights")?.content || "";
           const g = found.sections.find((s) => s.sectionType === "gratitude")?.content || "";
           const l = found.sections.find((s) => s.sectionType === "learned")?.content || "";
@@ -88,8 +157,9 @@ export default function TodayScreen() {
           setLearlearned(l);
           setTomorrow(t);
           setSaveStatus("synced");
+          setStatusMessage(null);
         } else {
-          // Reset for fresh entry
+          // Fresh entry for date
           setEntryId(null);
           setRevision(1);
           setTitle("");
@@ -104,16 +174,16 @@ export default function TodayScreen() {
           setTomorrow("");
           setSaveStatus("draft");
         }
-      } catch (err: any) {
+      } catch {
         if (!cancelled) {
-          setStatusMessage("Working offline. Local draft mode.");
+          setStatusMessage("Working offline. All changes saved locally.");
         }
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
 
-    fetchEntry();
+    loadData();
     return () => {
       cancelled = true;
     };
@@ -135,6 +205,22 @@ export default function TodayScreen() {
       tomorrow ? { sectionType: "tomorrow" as const, content: tomorrow, sortOrder: 3 } : null,
     ].filter(Boolean) as any[];
 
+    const draftData = {
+      entryId,
+      baseRevision: revision,
+      title: title.trim() || null,
+      body: body.trim(),
+      mood,
+      energy,
+      isFavorite,
+      sections,
+      tags: selectedTags,
+    };
+
+    // 1. Save to local draft store and sync queue immediately
+    await syncManager.saveLocalDraft(currentDate, draftData);
+
+    // 2. Try online sync immediately
     try {
       if (entryId) {
         const updated = await api.updateEntry(entryId, {
@@ -149,7 +235,8 @@ export default function TodayScreen() {
         });
         setRevision(updated.revision);
         setSaveStatus("synced");
-        setStatusMessage("Entry saved!");
+        await offlineStorage.deleteDraft(currentDate);
+        setStatusMessage("Entry synced successfully!");
       } else {
         const created = await api.createEntry({
           entryDate: currentDate,
@@ -165,15 +252,55 @@ export default function TodayScreen() {
         setEntryId(created.id);
         setRevision(created.revision);
         setSaveStatus("synced");
-        setStatusMessage("Entry created!");
+        await offlineStorage.deleteDraft(currentDate);
+        setStatusMessage("Entry created and synced!");
       }
     } catch (err: any) {
-      setSaveStatus("error");
       if (err.code === "CONFLICT") {
-        setStatusMessage("Conflict: Entry was updated elsewhere. Please refresh.");
+        setSaveStatus("error");
+        setShowConflictModal(true);
       } else {
-        setStatusMessage(err.message || "Failed to save entry.");
+        // Network failure: draft remains safely queued
+        setSaveStatus("draft");
+        setStatusMessage("Saved locally (offline). Will sync automatically when online.");
       }
+    }
+  };
+
+  const handleResolveConflict = async (strategy: "keep_server" | "keep_local") => {
+    setShowConflictModal(false);
+    setLoading(true);
+
+    try {
+      const serverEntry = await api.getEntryByDate(currentDate);
+      if (!serverEntry) return;
+
+      if (strategy === "keep_server") {
+        await syncManager.resolveConflict({
+          strategy: "keep_server",
+          entryId: serverEntry.id,
+          serverRevision: serverEntry.revision,
+        });
+        setEntryId(serverEntry.id);
+        setRevision(serverEntry.revision);
+        setTitle(serverEntry.title || "");
+        setBody(serverEntry.body || "");
+        setSaveStatus("synced");
+        setStatusMessage("Restored server version.");
+      } else if (strategy === "keep_local") {
+        await syncManager.resolveConflict({
+          strategy: "keep_local",
+          entryId: serverEntry.id,
+          serverRevision: serverEntry.revision,
+        });
+        setRevision(serverEntry.revision + 1);
+        setSaveStatus("synced");
+        setStatusMessage("Local changes applied over server.");
+      }
+    } catch {
+      setStatusMessage("Failed to resolve conflict. Check connection.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -188,7 +315,7 @@ export default function TodayScreen() {
       });
       setAiPrompt(res.prompt);
     } catch {
-      setAiPrompt("What is the single most meaningful event that shaped your mood today?");
+      setAiPrompt("What is the single most meaningful event that shaped your perspective today?");
     } finally {
       setAiLoading(false);
     }
@@ -219,39 +346,65 @@ export default function TodayScreen() {
         contentContainerStyle={styles.contentContainer}
         keyboardShouldPersistTaps="handled"
       >
+        {/* Offline Sync Banner */}
+        {pendingSyncCount > 0 && (
+          <View style={styles.syncBanner}>
+            <View style={styles.syncBannerLeft}>
+              <Ionicons name="cloud-offline-outline" size={16} color={THEME.colors.amber} />
+              <Text style={styles.syncBannerText}>
+                {pendingSyncCount} offline change{pendingSyncCount === 1 ? "" : "s"} queued
+              </Text>
+            </View>
+            <Pressable
+              style={styles.syncNowButton}
+              onPress={() => syncManager.flushQueue()}
+            >
+              <Text style={styles.syncNowButtonText}>Sync Now</Text>
+            </Pressable>
+          </View>
+        )}
+
         {/* Date Navigation Bar */}
         <View style={styles.dateNavRow}>
           <Pressable
-            style={styles.dateNavButton}
+            style={styles.navArrowBtn}
             onPress={() => setCurrentDate((d) => shiftDateString(d, -1))}
           >
-            <Text style={styles.dateNavButtonText}>‹ Previous</Text>
+            <Ionicons name="chevron-back" size={18} color={THEME.colors.textPrimary} />
           </Pressable>
 
           <Pressable
-            style={styles.todayButton}
+            style={styles.dateDisplay}
             onPress={() => setCurrentDate(getTodayString())}
           >
-            <Text style={styles.todayButtonText}>
-              {currentDate === getTodayString() ? "● Today" : "Jump to Today"}
-            </Text>
+            <Ionicons
+              name={currentDate === getTodayString() ? "calendar" : "calendar-outline"}
+              size={15}
+              color={currentDate === getTodayString() ? THEME.colors.accent : THEME.colors.textSecondary}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={styles.dateDisplayText}>{formatDisplayDate(currentDate)}</Text>
           </Pressable>
 
           <Pressable
-            style={styles.dateNavButton}
+            style={styles.navArrowBtn}
             onPress={() => setCurrentDate((d) => shiftDateString(d, 1))}
           >
-            <Text style={styles.dateNavButtonText}>Next ›</Text>
+            <Ionicons name="chevron-forward" size={18} color={THEME.colors.textPrimary} />
           </Pressable>
         </View>
 
-        {/* Header Bar */}
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.dateSubtitle}>{currentDate}</Text>
-            <Text style={styles.headerTitle}>Daily Journal</Text>
+        {/* Top Header / Meta Bar */}
+        <View style={styles.headerBar}>
+          <View style={styles.headerTitleWrap}>
+            <Text style={styles.headerEyebrow}>DAILY REFLECTION</Text>
+            <Text style={styles.headerMainTitle}>
+              {currentDate === getTodayString() ? "Today's Canvas" : "Journal Entry"}
+            </Text>
           </View>
-          <View style={styles.headerRight}>
+
+          <View style={styles.headerActions}>
+            {/* Favorite Button */}
             <Pressable
               style={styles.favoriteButton}
               onPress={() => {
@@ -260,60 +413,116 @@ export default function TodayScreen() {
               }}
               accessibilityLabel="Toggle Favorite"
             >
-              <Text style={styles.favoriteIcon}>{isFavorite ? "★" : "☆"}</Text>
+              <Ionicons
+                name={isFavorite ? "heart" : "heart-outline"}
+                size={20}
+                color={isFavorite ? THEME.colors.rose : THEME.colors.textSecondary}
+              />
             </Pressable>
+
+            {/* Sync Status Badge */}
             <View
               style={[
-                styles.statusPill,
+                styles.statusBadge,
                 saveStatus === "synced"
-                  ? styles.statusSynced
+                  ? styles.statusBadgeSynced
                   : saveStatus === "saving"
-                  ? styles.statusSaving
+                  ? styles.statusBadgeSaving
                   : saveStatus === "error"
-                  ? styles.statusError
-                  : styles.statusDraft,
+                  ? styles.statusBadgeError
+                  : styles.statusBadgeDraft,
               ]}
             >
+              <Ionicons
+                name={
+                  saveStatus === "synced"
+                    ? "checkmark-circle"
+                    : saveStatus === "saving"
+                    ? "sync-outline"
+                    : saveStatus === "error"
+                    ? "alert-circle-outline"
+                    : "cloud-offline-outline"
+                }
+                size={13}
+                color={
+                  saveStatus === "synced"
+                    ? THEME.colors.emerald
+                    : saveStatus === "saving"
+                    ? THEME.colors.accent
+                    : saveStatus === "error"
+                    ? THEME.colors.rose
+                    : THEME.colors.amber
+                }
+              />
               <Text
                 style={[
-                  styles.statusText,
-                  saveStatus === "synced"
-                    ? styles.statusTextSynced
-                    : styles.statusTextDraft,
+                  styles.statusBadgeText,
+                  {
+                    color:
+                      saveStatus === "synced"
+                        ? THEME.colors.emerald
+                        : saveStatus === "saving"
+                        ? THEME.colors.accent
+                        : saveStatus === "error"
+                        ? THEME.colors.rose
+                        : THEME.colors.amber,
+                  },
                 ]}
               >
                 {saveStatus === "synced"
-                  ? "✓ Saved"
+                  ? "Synced"
                   : saveStatus === "saving"
-                  ? "Saving..."
+                  ? "Saving"
                   : saveStatus === "error"
-                  ? "Error"
-                  : "Draft"}
+                  ? "Conflict"
+                  : "Local Draft"}
               </Text>
             </View>
           </View>
         </View>
 
         {statusMessage && (
-          <View style={styles.notificationBanner}>
+          <View style={styles.notificationToast}>
             <Text style={styles.notificationText}>{statusMessage}</Text>
           </View>
         )}
 
         {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#6366f1" />
-            <Text style={styles.loadingText}>Loading entry for {currentDate}...</Text>
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="small" color={THEME.colors.accent} />
+            <Text style={styles.loadingText}>Loading {currentDate}...</Text>
           </View>
         ) : (
           <>
-            {/* Title / Headline */}
+            {/* AI Reflection Spark (Bento Card) */}
+            <View style={styles.aiSparkCard}>
+              <View style={styles.aiSparkHeader}>
+                <View style={styles.aiSparkTitleRow}>
+                  <Ionicons name="sparkles-outline" size={17} color={THEME.colors.accent} />
+                  <Text style={styles.aiSparkTitle}>Reflection Spark</Text>
+                </View>
+                <Pressable
+                  style={styles.aiSparkButton}
+                  onPress={handleAiReflection}
+                  disabled={aiLoading}
+                >
+                  {aiLoading ? (
+                    <ActivityIndicator size="small" color={THEME.colors.textPrimary} />
+                  ) : (
+                    <Text style={styles.aiSparkButtonText}>Ask Guide</Text>
+                  )}
+                </Pressable>
+              </View>
+              {aiPrompt && <Text style={styles.aiSparkContent}>{aiPrompt}</Text>}
+            </View>
+
+            {/* Headline Input Card */}
             <View style={styles.card}>
-              <Text style={styles.fieldLabel}>Headline</Text>
+              <Text style={styles.fieldLabel}>HEADLINE</Text>
               <TextInput
-                style={styles.titleInput}
-                placeholder="Give today a title or theme..."
-                placeholderTextColor="#9ca3af"
+                style={styles.headlineInput}
+                placeholder="Give today a title or central theme..."
+                placeholderTextColor={THEME.colors.textTertiary}
                 value={title}
                 onChangeText={(t) => {
                   setTitle(t);
@@ -322,34 +531,15 @@ export default function TodayScreen() {
               />
             </View>
 
-            {/* AI Reflection Prompt Banner */}
-            <View style={styles.aiCard}>
-              <View style={styles.aiHeaderRow}>
-                <Text style={styles.aiHeading}>✨ Groq AI Reflection Guide</Text>
-                <Pressable
-                  style={styles.aiButton}
-                  onPress={handleAiReflection}
-                  disabled={aiLoading}
-                >
-                  {aiLoading ? (
-                    <ActivityIndicator size="small" color="#ffffff" />
-                  ) : (
-                    <Text style={styles.aiButtonText}>Ask AI</Text>
-                  )}
-                </Pressable>
-              </View>
-              {aiPrompt && <Text style={styles.aiPromptText}>{aiPrompt}</Text>}
-            </View>
-
-            {/* Journal Body */}
+            {/* Main Journal Canvas */}
             <View style={styles.card}>
-              <Text style={styles.fieldLabel}>Main Entry</Text>
+              <Text style={styles.fieldLabel}>ENTRY</Text>
               <TextInput
                 style={styles.bodyInput}
-                placeholder="What happened today? How are you feeling?"
-                placeholderTextColor="#9ca3af"
+                placeholder="What happened today? Write freely..."
+                placeholderTextColor={THEME.colors.textTertiary}
                 multiline
-                numberOfLines={6}
+                numberOfLines={7}
                 textAlignVertical="top"
                 value={body}
                 onChangeText={(b) => {
@@ -361,139 +551,122 @@ export default function TodayScreen() {
 
             {/* Mood & Energy Selectors */}
             <View style={styles.card}>
-              <Text style={styles.fieldLabel}>Mood</Text>
-              <View style={styles.optionsRow}>
-                {MOOD_OPTIONS.map((opt) => (
-                  <Pressable
-                    key={opt.level}
-                    style={[
-                      styles.optionChip,
-                      mood === opt.level && styles.optionChipSelected,
-                    ]}
-                    onPress={() => {
-                      setMood(opt.level);
-                      setSaveStatus("draft");
-                    }}
-                  >
-                    <Text style={styles.optionEmoji}>{opt.emoji}</Text>
-                    <Text
-                      style={[
-                        styles.optionLabel,
-                        mood === opt.level && styles.optionLabelSelected,
-                      ]}
-                    >
-                      {opt.label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
+              <Text style={styles.fieldLabel}>MOOD</Text>
+              <MoodSelector
+                value={mood}
+                onChange={(m) => {
+                  setMood(m);
+                  setSaveStatus("draft");
+                }}
+              />
 
-              <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Energy</Text>
-              <View style={styles.optionsRow}>
-                {ENERGY_OPTIONS.map((opt) => (
-                  <Pressable
-                    key={opt.level}
-                    style={[
-                      styles.optionChip,
-                      energy === opt.level && styles.optionChipSelected,
-                    ]}
-                    onPress={() => {
-                      setEnergy(opt.level);
-                      setSaveStatus("draft");
-                    }}
-                  >
-                    <Text style={styles.optionEmoji}>{opt.bars}</Text>
-                    <Text
-                      style={[
-                        styles.optionLabel,
-                        energy === opt.level && styles.optionLabelSelected,
-                      ]}
-                    >
-                      {opt.label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
+              <Text style={[styles.fieldLabel, { marginTop: THEME.spacing.lg }]}>
+                ENERGY LEVEL
+              </Text>
+              <EnergySelector
+                value={energy}
+                onChange={(e) => {
+                  setEnergy(e);
+                  setSaveStatus("draft");
+                }}
+              />
             </View>
 
-            {/* Structured Reflection Sections */}
+            {/* Structured Reflections Bento Grid */}
             <View style={styles.card}>
-              <Text style={styles.sectionHeader}>Structured Reflections</Text>
+              <Text style={styles.fieldLabel}>STRUCTURED REFLECTION</Text>
 
-              <Text style={styles.sectionSubtitle}>🌟 Daily Highlights</Text>
-              <TextInput
-                style={styles.sectionInput}
-                placeholder="Key moments, wins, or accomplishments..."
-                placeholderTextColor="#9ca3af"
-                multiline
-                value={highlights}
-                onChangeText={(t) => {
-                  setHighlights(t);
-                  setSaveStatus("draft");
-                }}
-              />
+              {/* Highlights */}
+              <View style={styles.bentoSection}>
+                <View style={styles.bentoHeader}>
+                  <Ionicons name="ribbon-outline" size={16} color={THEME.colors.amber} />
+                  <Text style={styles.bentoTitle}>Daily Highlights</Text>
+                </View>
+                <TextInput
+                  style={styles.bentoInput}
+                  placeholder="Key moments, wins, or accomplishments..."
+                  placeholderTextColor={THEME.colors.textTertiary}
+                  multiline
+                  value={highlights}
+                  onChangeText={(t) => {
+                    setHighlights(t);
+                    setSaveStatus("draft");
+                  }}
+                />
+              </View>
 
-              <Text style={[styles.sectionSubtitle, { marginTop: 12 }]}>🙏 Gratitude</Text>
-              <TextInput
-                style={styles.sectionInput}
-                placeholder="Things, people, or moments you are grateful for..."
-                placeholderTextColor="#9ca3af"
-                multiline
-                value={gratitude}
-                onChangeText={(t) => {
-                  setGratitude(t);
-                  setSaveStatus("draft");
-                }}
-              />
+              {/* Gratitude */}
+              <View style={styles.bentoSection}>
+                <View style={styles.bentoHeader}>
+                  <Ionicons name="gift-outline" size={16} color={THEME.colors.rose} />
+                  <Text style={styles.bentoTitle}>Gratitude</Text>
+                </View>
+                <TextInput
+                  style={styles.bentoInput}
+                  placeholder="People, privileges, or moments you appreciate..."
+                  placeholderTextColor={THEME.colors.textTertiary}
+                  multiline
+                  value={gratitude}
+                  onChangeText={(t) => {
+                    setGratitude(t);
+                    setSaveStatus("draft");
+                  }}
+                />
+              </View>
 
-              <Text style={[styles.sectionSubtitle, { marginTop: 12 }]}>💡 Lessons Learned</Text>
-              <TextInput
-                style={styles.sectionInput}
-                placeholder="Insights or takeaways from today..."
-                placeholderTextColor="#9ca3af"
-                multiline
-                value={learned}
-                onChangeText={(t) => {
-                  setLearlearned(t);
-                  setSaveStatus("draft");
-                }}
-              />
+              {/* Lessons */}
+              <View style={styles.bentoSection}>
+                <View style={styles.bentoHeader}>
+                  <Ionicons name="bulb-outline" size={16} color={THEME.colors.emerald} />
+                  <Text style={styles.bentoTitle}>Lessons Learned</Text>
+                </View>
+                <TextInput
+                  style={styles.bentoInput}
+                  placeholder="Takeaways, corrections, or discoveries..."
+                  placeholderTextColor={THEME.colors.textTertiary}
+                  multiline
+                  value={learned}
+                  onChangeText={(t) => {
+                    setLearlearned(t);
+                    setSaveStatus("draft");
+                  }}
+                />
+              </View>
 
-              <Text style={[styles.sectionSubtitle, { marginTop: 12 }]}>🎯 Tomorrow Intention</Text>
-              <TextInput
-                style={styles.sectionInput}
-                placeholder="Focus, intention, or priority for tomorrow..."
-                placeholderTextColor="#9ca3af"
-                multiline
-                value={tomorrow}
-                onChangeText={(t) => {
-                  setTomorrow(t);
-                  setSaveStatus("draft");
-                }}
-              />
+              {/* Tomorrow */}
+              <View style={styles.bentoSection}>
+                <View style={styles.bentoHeader}>
+                  <Ionicons name="flag-outline" size={16} color={THEME.colors.sky} />
+                  <Text style={styles.bentoTitle}>Tomorrow's Intention</Text>
+                </View>
+                <TextInput
+                  style={styles.bentoInput}
+                  placeholder="What is the single primary priority for tomorrow?"
+                  placeholderTextColor={THEME.colors.textTertiary}
+                  multiline
+                  value={tomorrow}
+                  onChangeText={(t) => {
+                    setTomorrow(t);
+                    setSaveStatus("draft");
+                  }}
+                />
+              </View>
             </View>
 
             {/* Tags Section */}
             <View style={styles.card}>
-              <Text style={styles.fieldLabel}>Tags</Text>
+              <Text style={styles.fieldLabel}>TAGS</Text>
               <View style={styles.tagsContainer}>
                 {ALL_TAGS.map((tag) => {
-                  const isSelected = selectedTags.includes(tag.toLowerCase());
+                  const normalized = tag.toLowerCase();
+                  const isSelected = selectedTags.includes(normalized);
                   return (
-                    <Pressable
+                    <TagPill
                       key={tag}
-                      style={[styles.tagPill, isSelected && styles.tagPillSelected]}
-                      onPress={() => toggleTag(tag.toLowerCase())}
-                    >
-                      <Text
-                        style={[
-                          styles.tagPillText,
-                          isSelected && styles.tagPillTextSelected,
-                        ]}
-                      >
-                        #{tag}
-                      </Text>
-                    </Pressable>
+                      label={tag}
+                      isSelected={isSelected}
+                      onPress={() => toggleTag(normalized)}
+                    />
                   );
                 })}
               </View>
@@ -502,7 +675,7 @@ export default function TodayScreen() {
                 <TextInput
                   style={styles.addTagInput}
                   placeholder="Add custom tag..."
-                  placeholderTextColor="#9ca3af"
+                  placeholderTextColor={THEME.colors.textTertiary}
                   value={newTagInput}
                   onChangeText={setNewTagInput}
                   onSubmitEditing={handleAddCustomTag}
@@ -513,19 +686,68 @@ export default function TodayScreen() {
               </View>
             </View>
 
-            {/* Save Entry CTA */}
+            {/* Save Button */}
             <Pressable
-              style={[styles.saveButton, saveStatus === "saving" && styles.saveButtonDisabled]}
+              style={[
+                styles.saveButton,
+                saveStatus === "saving" && styles.saveButtonDisabled,
+              ]}
               onPress={handleSave}
               disabled={saveStatus === "saving"}
             >
+              <Ionicons
+                name="checkmark"
+                size={18}
+                color={THEME.colors.textPrimary}
+                style={{ marginRight: 6 }}
+              />
               <Text style={styles.saveButtonText}>
-                {saveStatus === "saving" ? "Saving..." : "Save Journal Entry"}
+                {saveStatus === "saving" ? "Saving..." : "Save Entry"}
               </Text>
             </Pressable>
           </>
         )}
       </ScrollView>
+
+      {/* Conflict Resolution Modal */}
+      <Modal
+        visible={showConflictModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowConflictModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.conflictCard}>
+            <View style={styles.conflictIconHeader}>
+              <Ionicons name="alert-circle-outline" size={28} color={THEME.colors.rose} />
+              <Text style={styles.conflictTitle}>Version Conflict Detected</Text>
+            </View>
+            <Text style={styles.conflictBody}>
+              This entry was modified on another device while this device was offline. How would you like to proceed?
+            </Text>
+
+            <View style={styles.conflictActions}>
+              <Pressable
+                style={styles.conflictButtonSecondary}
+                onPress={() => handleResolveConflict("keep_server")}
+              >
+                <Text style={styles.conflictButtonSecondaryText}>
+                  Keep Server Version
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.conflictButtonPrimary}
+                onPress={() => handleResolveConflict("keep_local")}
+              >
+                <Text style={styles.conflictButtonPrimaryText}>
+                  Overwrite with My Changes
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -533,274 +755,280 @@ export default function TodayScreen() {
 const styles = StyleSheet.create({
   keyboardContainer: {
     flex: 1,
-    backgroundColor: "#f9fafb",
+    backgroundColor: THEME.colors.background,
   },
   scrollView: {
     flex: 1,
   },
   contentContainer: {
-    padding: 16,
-    paddingBottom: 40,
-    maxWidth: 720,
+    padding: THEME.spacing.lg,
+    paddingBottom: 50,
+    maxWidth: 740,
     width: "100%",
     alignSelf: "center",
+  },
+  syncBanner: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: THEME.colors.amberMuted,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: THEME.radius.md,
+    marginBottom: THEME.spacing.md,
+    borderWidth: 1,
+    borderColor: "rgba(245, 158, 11, 0.25)",
+  },
+  syncBannerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  syncBannerText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: THEME.colors.amber,
+  },
+  syncNowButton: {
+    backgroundColor: THEME.colors.amber,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: THEME.radius.sm,
+  },
+  syncNowButtonText: {
+    color: "#0c0d12",
+    fontSize: 11,
+    fontWeight: "700",
   },
   dateNavRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    padding: 8,
-    marginBottom: 16,
+    backgroundColor: THEME.colors.surface,
+    borderRadius: THEME.radius.lg,
+    padding: 6,
+    marginBottom: THEME.spacing.md,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: THEME.colors.border,
   },
-  dateNavButton: {
+  navArrowBtn: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: THEME.radius.md,
+    backgroundColor: THEME.colors.surfaceSubtle,
+  },
+  dateDisplay: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 6,
     paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: "#f3f4f6",
   },
-  dateNavButtonText: {
-    fontSize: 13,
+  dateDisplayText: {
+    color: THEME.colors.textPrimary,
+    fontSize: 14,
     fontWeight: "600",
-    color: "#4b5563",
+    letterSpacing: -0.2,
   },
-  todayButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: "#e0e7ff",
-  },
-  todayButtonText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#4f46e5",
-  },
-  headerRow: {
+  headerBar: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: THEME.spacing.md,
+    marginTop: 4,
   },
-  dateSubtitle: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#6b7280",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+  headerTitleWrap: {
+    gap: 2,
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#111827",
+  headerEyebrow: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: THEME.colors.textTertiary,
+    letterSpacing: 1.2,
   },
-  headerRight: {
+  headerMainTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: THEME.colors.textPrimary,
+    letterSpacing: -0.4,
+  },
+  headerActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 10,
   },
   favoriteButton: {
-    padding: 6,
+    width: 38,
+    height: 38,
+    borderRadius: THEME.radius.full,
+    backgroundColor: THEME.colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
   },
-  favoriteIcon: {
-    fontSize: 22,
-    color: "#f59e0b",
-  },
-  statusPill: {
+  statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingVertical: 6,
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-  },
-  statusSynced: {
-    backgroundColor: "#d1fae5",
-  },
-  statusSaving: {
-    backgroundColor: "#fef3c7",
-  },
-  statusDraft: {
-    backgroundColor: "#e5e7eb",
-  },
-  statusError: {
-    backgroundColor: "#fee2e2",
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  statusTextSynced: {
-    color: "#065f46",
-  },
-  statusTextDraft: {
-    color: "#4b5563",
-  },
-  notificationBanner: {
-    backgroundColor: "#eff6ff",
-    padding: 10,
-    borderRadius: 8,
+    borderRadius: THEME.radius.full,
     borderWidth: 1,
-    borderColor: "#bfdbfe",
-    marginBottom: 12,
   },
-  notificationText: {
-    fontSize: 13,
-    color: "#1e40af",
-    textAlign: "center",
+  statusBadgeSynced: {
+    backgroundColor: THEME.colors.emeraldMuted,
+    borderColor: "rgba(16, 185, 129, 0.25)",
   },
-  loadingContainer: {
-    paddingVertical: 40,
-    alignItems: "center",
+  statusBadgeSaving: {
+    backgroundColor: THEME.colors.accentMuted,
+    borderColor: THEME.colors.accentBorder,
   },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: "#6b7280",
+  statusBadgeDraft: {
+    backgroundColor: THEME.colors.amberMuted,
+    borderColor: "rgba(245, 158, 11, 0.25)",
   },
-  card: {
-    backgroundColor: "#ffffff",
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+  statusBadgeError: {
+    backgroundColor: THEME.colors.roseMuted,
+    borderColor: "rgba(244, 63, 94, 0.25)",
   },
-  aiCard: {
-    backgroundColor: "#faf5ff",
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#e9d5ff",
-  },
-  aiHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  aiHeading: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#7e22ce",
-  },
-  aiButton: {
-    backgroundColor: "#9333ea",
-    paddingVertical: 4,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-  },
-  aiButtonText: {
-    color: "#ffffff",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  aiPromptText: {
-    marginTop: 10,
-    fontSize: 13,
-    fontStyle: "italic",
-    color: "#581c87",
-    lineHeight: 18,
-  },
-  fieldLabel: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#374151",
-    marginBottom: 8,
-    textTransform: "uppercase",
-    letterSpacing: 0.3,
-  },
-  titleInput: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#111827",
-    paddingVertical: 4,
-  },
-  bodyInput: {
-    fontSize: 15,
-    color: "#1f2937",
-    lineHeight: 22,
-    minHeight: 120,
-  },
-  optionsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 6,
-  },
-  optionChip: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    backgroundColor: "#f9fafb",
-  },
-  optionChipSelected: {
-    borderColor: "#6366f1",
-    backgroundColor: "#e0e7ff",
-  },
-  optionEmoji: {
-    fontSize: 18,
-    marginBottom: 4,
-  },
-  optionLabel: {
+  statusBadgeText: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#4b5563",
   },
-  optionLabelSelected: {
-    color: "#4338ca",
-    fontWeight: "700",
+  notificationToast: {
+    backgroundColor: THEME.colors.surfaceSubtle,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    padding: 10,
+    borderRadius: THEME.radius.md,
+    marginBottom: THEME.spacing.md,
   },
-  sectionHeader: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#111827",
-    marginBottom: 12,
+  notificationText: {
+    color: THEME.colors.textSecondary,
+    fontSize: 12,
   },
-  sectionSubtitle: {
+  loadingBox: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 30,
+    gap: 10,
+  },
+  loadingText: {
+    color: THEME.colors.textSecondary,
+    fontSize: 13,
+  },
+  aiSparkCard: {
+    backgroundColor: THEME.colors.surface,
+    borderRadius: THEME.radius.lg,
+    padding: 14,
+    marginBottom: THEME.spacing.md,
+    borderWidth: 1,
+    borderColor: THEME.colors.accentBorder,
+  },
+  aiSparkHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  aiSparkTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+  aiSparkTitle: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#374151",
+    color: THEME.colors.accent,
+    letterSpacing: -0.2,
+  },
+  aiSparkButton: {
+    backgroundColor: THEME.colors.accentMuted,
+    borderWidth: 1,
+    borderColor: THEME.colors.accentBorder,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: THEME.radius.full,
+  },
+  aiSparkButtonText: {
+    color: THEME.colors.textPrimary,
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  aiSparkContent: {
+    marginTop: 10,
+    color: THEME.colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+    fontStyle: "italic",
+  },
+  card: {
+    backgroundColor: THEME.colors.surface,
+    borderRadius: THEME.radius.lg,
+    padding: THEME.spacing.lg,
+    marginBottom: THEME.spacing.md,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+  },
+  fieldLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: THEME.colors.textTertiary,
+    letterSpacing: 1.1,
+    marginBottom: 8,
+  },
+  headlineInput: {
+    backgroundColor: THEME.colors.surfaceSubtle,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    borderRadius: THEME.radius.md,
+    padding: 12,
+    color: THEME.colors.textPrimary,
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  bodyInput: {
+    backgroundColor: THEME.colors.surfaceSubtle,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    borderRadius: THEME.radius.md,
+    padding: 14,
+    color: THEME.colors.textPrimary,
+    fontSize: 15,
+    lineHeight: 22,
+    minHeight: 140,
+  },
+  bentoSection: {
+    backgroundColor: THEME.colors.surfaceSubtle,
+    borderRadius: THEME.radius.md,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: THEME.colors.borderSubtle,
+  },
+  bentoHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     marginBottom: 6,
   },
-  sectionInput: {
-    backgroundColor: "#f9fafb",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 8,
-    padding: 10,
-    fontSize: 14,
-    color: "#1f2937",
-    minHeight: 50,
+  bentoTitle: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: THEME.colors.textSecondary,
+  },
+  bentoInput: {
+    color: THEME.colors.textPrimary,
+    fontSize: 13,
+    lineHeight: 18,
+    minHeight: 36,
   },
   tagsContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 6,
+    gap: 8,
     marginBottom: 12,
-  },
-  tagPill: {
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 16,
-    backgroundColor: "#f3f4f6",
-  },
-  tagPillSelected: {
-    backgroundColor: "#4f46e5",
-  },
-  tagPillText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#4b5563",
-  },
-  tagPillTextSelected: {
-    color: "#ffffff",
   },
   addTagRow: {
     flexDirection: "row",
@@ -808,44 +1036,108 @@ const styles = StyleSheet.create({
   },
   addTagInput: {
     flex: 1,
-    backgroundColor: "#f9fafb",
+    backgroundColor: THEME.colors.surfaceSubtle,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderColor: THEME.colors.border,
+    borderRadius: THEME.radius.md,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    color: THEME.colors.textPrimary,
     fontSize: 13,
-    color: "#111827",
   },
   addTagButton: {
-    backgroundColor: "#4f46e5",
+    backgroundColor: THEME.colors.surfaceSubtle,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    borderRadius: THEME.radius.md,
     paddingHorizontal: 14,
     justifyContent: "center",
-    borderRadius: 8,
+    alignItems: "center",
   },
   addTagButtonText: {
-    color: "#ffffff",
-    fontWeight: "700",
+    color: THEME.colors.textSecondary,
     fontSize: 12,
+    fontWeight: "600",
   },
   saveButton: {
-    backgroundColor: "#4f46e5",
+    flexDirection: "row",
+    backgroundColor: THEME.colors.accent,
+    borderRadius: THEME.radius.md,
     paddingVertical: 14,
-    borderRadius: 12,
     alignItems: "center",
-    marginTop: 8,
-    shadowColor: "#4f46e5",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 3,
+    justifyContent: "center",
+    marginTop: 4,
   },
   saveButtonDisabled: {
     opacity: 0.6,
   },
   saveButtonText: {
     color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: -0.2,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  conflictCard: {
+    backgroundColor: THEME.colors.surface,
+    borderRadius: THEME.radius.xl,
+    padding: 22,
+    maxWidth: 440,
+    width: "100%",
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+  },
+  conflictIconHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 12,
+  },
+  conflictTitle: {
     fontSize: 16,
     fontWeight: "700",
+    color: THEME.colors.textPrimary,
+  },
+  conflictBody: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: THEME.colors.textSecondary,
+    marginBottom: 20,
+  },
+  conflictActions: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  conflictButtonSecondary: {
+    flex: 1,
+    backgroundColor: THEME.colors.surfaceSubtle,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    borderRadius: THEME.radius.md,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  conflictButtonSecondaryText: {
+    color: THEME.colors.textSecondary,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  conflictButtonPrimary: {
+    flex: 1,
+    backgroundColor: THEME.colors.accent,
+    borderRadius: THEME.radius.md,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  conflictButtonPrimaryText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "600",
   },
 });

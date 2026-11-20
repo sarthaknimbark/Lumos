@@ -8,9 +8,22 @@ import {
   TextInput,
   View,
 } from "react-native";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { api } from "../../src/api/client";
-import { ALL_TAGS, MOOD_OPTIONS, PAST_ENTRIES_MOCK } from "../../src/mockData";
+import { ALL_TAGS, PAST_ENTRIES_MOCK } from "../../src/mockData";
+import { THEME, THEME_MOODS } from "../../src/theme";
 import { JournalEntryResponse } from "@myday/contracts";
+
+function formatDisplayDate(dateStr: string) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  return date.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
 
 export default function SearchScreen() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -95,25 +108,24 @@ export default function SearchScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       {/* Search Input Box */}
       <View style={styles.searchBarContainer}>
-        <Text style={styles.searchIcon}>🔍</Text>
+        <Ionicons name="search-outline" size={18} color={THEME.colors.textSecondary} style={{ marginRight: 8 }} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search by words, lessons, highlights..."
-          placeholderTextColor="#9ca3af"
+          placeholder="Search by keywords, lessons, highlights..."
+          placeholderTextColor={THEME.colors.textTertiary}
           value={searchQuery}
           onChangeText={setSearchQuery}
-          clearButtonMode="while-editing"
         />
         {searchQuery.length > 0 && (
-          <Pressable onPress={() => setSearchQuery("")} style={styles.clearSearchButton}>
-            <Text style={styles.clearSearchText}>✕</Text>
+          <Pressable onPress={() => setSearchQuery("")} hitSlop={8}>
+            <Ionicons name="close-circle" size={17} color={THEME.colors.textTertiary} />
           </Pressable>
         )}
       </View>
 
       {/* Tag Filters */}
       <View style={styles.filterSection}>
-        <Text style={styles.filterSectionTitle}>Filter by Tag</Text>
+        <Text style={styles.filterSectionTitle}>FILTER BY TAG</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagScroll}>
           {ALL_TAGS.map((tag) => {
             const isSelected = selectedTag === tag.toLowerCase();
@@ -139,21 +151,31 @@ export default function SearchScreen() {
 
       {/* Mood Filters */}
       <View style={styles.filterSection}>
-        <Text style={styles.filterSectionTitle}>Filter by Mood</Text>
+        <Text style={styles.filterSectionTitle}>FILTER BY MOOD</Text>
         <View style={styles.moodRow}>
-          {MOOD_OPTIONS.map((opt) => {
+          {THEME_MOODS.map((opt) => {
             const isSelected = selectedMood === opt.level;
             return (
               <Pressable
                 key={opt.level}
-                style={[styles.moodChip, isSelected && styles.moodChipActive]}
+                style={[
+                  styles.moodChip,
+                  isSelected
+                    ? [styles.moodChipActive, { backgroundColor: opt.accentColor }]
+                    : styles.moodChipInactive,
+                ]}
                 onPress={() => setSelectedMood(isSelected ? null : opt.level)}
               >
-                <Text style={styles.moodEmoji}>{opt.emoji}</Text>
+                <Ionicons
+                  name={isSelected ? opt.iconFilled : opt.iconOutline}
+                  size={15}
+                  color={isSelected ? THEME.colors.textInverse : THEME.colors.textSecondary}
+                  style={{ marginRight: 5 }}
+                />
                 <Text
                   style={[
                     styles.moodLabel,
-                    isSelected && styles.moodLabelActive,
+                    isSelected ? styles.moodLabelActive : styles.moodLabelInactive,
                   ]}
                 >
                   {opt.label}
@@ -179,42 +201,53 @@ export default function SearchScreen() {
       {/* Results List */}
       {loading ? (
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="small" color="#6366f1" />
+          <ActivityIndicator size="small" color={THEME.colors.accent} />
         </View>
       ) : results.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyIcon}>🔍</Text>
+          <Ionicons name="search-outline" size={36} color={THEME.colors.textTertiary} />
           <Text style={styles.emptyTitle}>No matching entries</Text>
-          <Text style={styles.emptySubtitle}>Try adjusting your keywords or clearing the filters.</Text>
+          <Text style={styles.emptySubtitle}>
+            Try adjusting your search terms or resetting active filters.
+          </Text>
         </View>
       ) : (
-        results.map((entry) => (
-          <View key={entry.id} style={styles.resultCard}>
-            <View style={styles.cardTopRow}>
-              <Text style={styles.dateText}>{entry.entryDate}</Text>
-              {entry.mood && (
-                <Text style={styles.cardMood}>
-                  {MOOD_OPTIONS.find((m) => m.level === entry.mood)?.emoji}
-                </Text>
+        results.map((entry) => {
+          const moodDef = THEME_MOODS.find((m) => m.level === entry.mood);
+          return (
+            <View key={entry.id} style={styles.resultCard}>
+              <View style={styles.cardTopRow}>
+                <Text style={styles.dateText}>{formatDisplayDate(entry.entryDate)}</Text>
+                <View style={styles.cardRightIcons}>
+                  {entry.isFavorite && (
+                    <Ionicons name="heart" size={15} color={THEME.colors.rose} style={{ marginRight: 6 }} />
+                  )}
+                  {moodDef && (
+                    <View style={styles.resultMoodChip}>
+                      <Ionicons name={moodDef.iconFilled} size={12} color={moodDef.accentColor} />
+                    </View>
+                  )}
+                </View>
+              </View>
+
+              {entry.title ? <Text style={styles.entryTitle}>{entry.title}</Text> : null}
+
+              <Text style={styles.bodySnippet} numberOfLines={2}>
+                {entry.body}
+              </Text>
+
+              {entry.tags.length > 0 && (
+                <View style={styles.tagWrap}>
+                  {entry.tags.map((t) => (
+                    <Text key={t} style={styles.tagLabel}>
+                      #{t}
+                    </Text>
+                  ))}
+                </View>
               )}
             </View>
-
-            {entry.title ? <Text style={styles.cardHeadline}>{entry.title}</Text> : null}
-            <Text style={styles.cardBody} numberOfLines={3}>
-              {entry.body}
-            </Text>
-
-            {entry.tags.length > 0 && (
-              <View style={styles.tagsRow}>
-                {entry.tags.map((t) => (
-                  <Text key={t} style={styles.tagText}>
-                    #{t}
-                  </Text>
-                ))}
-              </View>
-            )}
-          </View>
-        ))
+          );
+        })
       )}
     </ScrollView>
   );
@@ -223,57 +256,40 @@ export default function SearchScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f9fafb",
+    backgroundColor: THEME.colors.background,
   },
   contentContainer: {
-    padding: 16,
-    paddingBottom: 40,
-    maxWidth: 720,
+    padding: THEME.spacing.lg,
+    paddingBottom: 50,
+    maxWidth: 740,
     width: "100%",
     alignSelf: "center",
-  },
-  centerContainer: {
-    paddingVertical: 30,
-    alignItems: "center",
   },
   searchBarContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    backgroundColor: THEME.colors.surface,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
-    marginBottom: 16,
-  },
-  searchIcon: {
-    fontSize: 16,
-    marginRight: 8,
+    borderColor: THEME.colors.border,
+    borderRadius: THEME.radius.lg,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: THEME.spacing.md,
   },
   searchInput: {
     flex: 1,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: "#111827",
-  },
-  clearSearchButton: {
-    padding: 6,
-  },
-  clearSearchText: {
-    color: "#9ca3af",
+    color: THEME.colors.textPrimary,
     fontSize: 14,
-    fontWeight: "700",
   },
   filterSection: {
-    marginBottom: 14,
+    marginBottom: THEME.spacing.md,
   },
   filterSectionTitle: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: "700",
-    color: "#4b5563",
-    textTransform: "uppercase",
+    color: THEME.colors.textTertiary,
+    letterSpacing: 1.1,
     marginBottom: 8,
-    letterSpacing: 0.3,
   },
   tagScroll: {
     flexDirection: "row",
@@ -281,66 +297,67 @@ const styles = StyleSheet.create({
   filterChip: {
     paddingVertical: 6,
     paddingHorizontal: 12,
-    borderRadius: 16,
-    backgroundColor: "#ffffff",
+    borderRadius: THEME.radius.full,
+    backgroundColor: THEME.colors.surfaceSubtle,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
-    marginRight: 6,
+    borderColor: THEME.colors.border,
+    marginRight: 8,
   },
   filterChipActive: {
-    backgroundColor: "#4f46e5",
-    borderColor: "#4f46e5",
+    backgroundColor: THEME.colors.accentMuted,
+    borderColor: THEME.colors.accent,
   },
   filterChipText: {
     fontSize: 12,
-    fontWeight: "600",
-    color: "#4b5563",
+    fontWeight: "500",
+    color: THEME.colors.textSecondary,
   },
   filterChipTextActive: {
-    color: "#ffffff",
+    color: THEME.colors.accent,
+    fontWeight: "700",
   },
   moodRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 6,
+    flexWrap: "wrap",
+    gap: 8,
   },
   moodChip: {
-    flex: 1,
+    flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: "#ffffff",
+    paddingVertical: 6,
+    paddingHorizontal: 11,
+    borderRadius: THEME.radius.full,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+  },
+  moodChipInactive: {
+    backgroundColor: THEME.colors.surfaceSubtle,
+    borderColor: THEME.colors.border,
   },
   moodChipActive: {
-    backgroundColor: "#e0e7ff",
-    borderColor: "#6366f1",
-  },
-  moodEmoji: {
-    fontSize: 16,
-    marginBottom: 2,
+    borderColor: "transparent",
   },
   moodLabel: {
-    fontSize: 11,
-    color: "#4b5563",
+    fontSize: 12,
     fontWeight: "600",
   },
+  moodLabelInactive: {
+    color: THEME.colors.textSecondary,
+  },
   moodLabelActive: {
-    color: "#4338ca",
-    fontWeight: "700",
+    color: THEME.colors.textInverse,
   },
   resultHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 8,
-    marginBottom: 12,
+    marginBottom: THEME.spacing.md,
+    marginTop: 6,
   },
   resultCount: {
-    fontSize: 14,
+    fontSize: 11,
     fontWeight: "700",
-    color: "#374151",
+    color: THEME.colors.textTertiary,
+    letterSpacing: 0.5,
   },
   clearAllButton: {
     paddingVertical: 4,
@@ -348,16 +365,37 @@ const styles = StyleSheet.create({
   },
   clearAllText: {
     fontSize: 12,
+    color: THEME.colors.accent,
     fontWeight: "600",
-    color: "#ef4444",
+  },
+  centerContainer: {
+    paddingVertical: 40,
+    alignItems: "center",
+  },
+  emptyContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+    gap: 8,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: THEME.colors.textPrimary,
+  },
+  emptySubtitle: {
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
+    textAlign: "center",
+    maxWidth: 280,
   },
   resultCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
+    backgroundColor: THEME.colors.surface,
+    borderRadius: THEME.radius.lg,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: THEME.colors.border,
   },
   cardTopRow: {
     flexDirection: "row",
@@ -366,54 +404,36 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   dateText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
-    color: "#6b7280",
-    textTransform: "uppercase",
+    color: THEME.colors.textTertiary,
   },
-  cardMood: {
-    fontSize: 16,
+  cardRightIcons: {
+    flexDirection: "row",
+    alignItems: "center",
   },
-  cardHeadline: {
+  resultMoodChip: {
+    padding: 2,
+  },
+  entryTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#111827",
+    color: THEME.colors.textPrimary,
     marginBottom: 4,
   },
-  cardBody: {
+  bodySnippet: {
     fontSize: 13,
-    color: "#374151",
     lineHeight: 18,
+    color: THEME.colors.textSecondary,
   },
-  tagsRow: {
+  tagWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 6,
     marginTop: 8,
   },
-  tagText: {
+  tagLabel: {
     fontSize: 11,
-    fontWeight: "600",
-    color: "#6366f1",
-  },
-  emptyContainer: {
-    paddingVertical: 50,
-    alignItems: "center",
-  },
-  emptyIcon: {
-    fontSize: 40,
-    marginBottom: 10,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 4,
-  },
-  emptySubtitle: {
-    fontSize: 13,
-    color: "#6b7280",
-    textAlign: "center",
-    maxWidth: 280,
+    color: THEME.colors.textTertiary,
   },
 });
