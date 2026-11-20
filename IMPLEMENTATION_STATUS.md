@@ -1,10 +1,10 @@
 # Implementation Status
 
-Current status: Phase 0 complete. Ready for Phase 1.
+Current status: Phase 1 complete. Ready for Phase 2.
 
 ## Phases
 - [x] 0 — Monorepo and tooling
-- [ ] 1 — Expo universal UI shell (mock data)
+- [x] 1 — Expo universal UI shell (mock data)
 - [ ] 2 — PostgreSQL + Drizzle persistence
 - [ ] 3 — API modules and OpenAPI
 - [ ] 4 — Authentication and account isolation
@@ -28,12 +28,13 @@ Current status: Phase 0 complete. Ready for Phase 1.
 - Google integrations: separate opt-in permissions
 
 ## Latest completed work
-- Phase 0: Monorepo established with pnpm workspaces.
-- Created `apps/client` (Expo Router universal app), `apps/api` (Fastify v5 TypeScript app), `packages/contracts` (Zod), `packages/core`, and `packages/db`.
-- Configured Metro monorepo watch folders, hoisted dependency resolution, and strict TypeScript.
-- Verified Fastify `/health` and `/api/v1/health` endpoints.
-- Verified Expo Router universal bundling for web and native.
-- Created `docs/BUILD_DECISIONS.md`.
+- Phase 1: Universal UI shell implemented with mock data.
+- Built responsive Tab Navigation (`apps/client/app/(tabs)/_layout.tsx`) for Today, Timeline, Search, and Settings.
+- Built Today Dashboard & Entry Editor (`app/(tabs)/index.tsx`): Headline, journal text input, Mood (1-5) and Energy (1-5) selectors, structured reflections (Highlights, Gratitude, Learned, Tomorrow Intention), tag selector, custom tag adding, favorite toggle, and save/draft status indicator.
+- Built Timeline Screen (`app/(tabs)/timeline.tsx`): Chronological cards, mood badges, expand/collapse reflection details, and favorite filtering.
+- Built Search Screen (`app/(tabs)/search.tsx`): Live text search, tag chips filter, mood filter pills, and instant results count.
+- Built Settings Screen (`app/(tabs)/settings.tsx`): Profile card, JSON/Markdown data export preview, daily reminder switch, theme preference, and integration status cards.
+- Verified TypeScript strict check and Metro static web export for all 10 routes.
 
 ## Blockers / decisions needed
-None. Ready to begin Phase 1 (Universal UI shell with mock data).
+None. Ready to begin Phase 2 (PostgreSQL + Drizzle persistence).
