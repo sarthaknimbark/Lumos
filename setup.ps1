@@ -1,4 +1,4 @@
-﻿# MyDay Platform — One-Click Setup Script (PowerShell)
+# MyDay Platform — One-Click Setup Script (PowerShell)
 # Run from repository root: .\setup.ps1
 
 Write-Host "========================================" -ForegroundColor Cyan

@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -7,38 +8,79 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { api } from "../../src/api/client";
 import { ALL_TAGS, MOOD_OPTIONS, PAST_ENTRIES_MOCK } from "../../src/mockData";
-import { MoodLevel } from "../../src/types";
+import { JournalEntryResponse } from "@myday/contracts";
 
 export default function SearchScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
-  const [selectedMood, setSelectedMood] = useState<MoodLevel | null>(null);
+  const [selectedMood, setSelectedMood] = useState<number | null>(null);
+  const [results, setResults] = useState<JournalEntryResponse[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const results = useMemo(() => {
-    return PAST_ENTRIES_MOCK.filter((entry) => {
-      // 1. Tag filter
-      if (selectedTag && !entry.tags.includes(selectedTag)) {
-        return false;
-      }
-      // 2. Mood filter
-      if (selectedMood && entry.mood !== selectedMood) {
-        return false;
-      }
-      // 3. Query filter
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchesTitle = entry.title.toLowerCase().includes(q);
-        const matchesBody = entry.body.toLowerCase().includes(q);
-        const matchesSections = entry.sections.some((s) =>
-          s.content.toLowerCase().includes(q)
-        );
-        if (!matchesTitle && !matchesBody && !matchesSections) {
-          return false;
+  useEffect(() => {
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await api.getEntries({
+          q: searchQuery.trim() || undefined,
+          tag: selectedTag || undefined,
+          mood: selectedMood || undefined,
+          limit: 30,
+        });
+        if (!cancelled) setResults(res.data);
+      } catch {
+        // Fallback filter over mock data
+        if (!cancelled) {
+          const fallback = PAST_ENTRIES_MOCK.filter((entry) => {
+            if (selectedTag && !entry.tags.includes(selectedTag)) return false;
+            if (selectedMood && entry.mood !== selectedMood) return false;
+            if (searchQuery.trim()) {
+              const q = searchQuery.toLowerCase();
+              const matchesTitle = entry.title?.toLowerCase().includes(q);
+              const matchesBody = entry.body.toLowerCase().includes(q);
+              const matchesSections = entry.sections.some((s) =>
+                s.content.toLowerCase().includes(q)
+              );
+              if (!matchesTitle && !matchesBody && !matchesSections) return false;
+            }
+            return true;
+          }).map((m) => ({
+            id: m.id,
+            userId: "00000000-0000-0000-0000-000000000001",
+            entryDate: m.entryDate,
+            title: m.title,
+            body: m.body,
+            mood: m.mood,
+            energy: m.energy,
+            status: "published" as const,
+            isFavorite: m.isFavorite,
+            revision: 1,
+            sections: m.sections.map((s, i) => ({
+              id: s.id,
+              sectionType: s.sectionType as any,
+              content: s.content,
+              sortOrder: i,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            })),
+            tags: m.tags,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }));
+          setResults(fallback);
         }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      return true;
-    });
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [searchQuery, selectedTag, selectedMood]);
 
   const hasActiveFilters = Boolean(searchQuery || selectedTag || selectedMood);
@@ -51,15 +93,16 @@ export default function SearchScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      {/* Search Input Bar */}
+      {/* Search Input Box */}
       <View style={styles.searchBarContainer}>
         <Text style={styles.searchIcon}>🔍</Text>
         <TextInput
           style={styles.searchInput}
-          placeholder="Search thoughts, memories, reflections..."
-          placeholderTextColor="#94a3b8"
+          placeholder="Search by words, lessons, highlights..."
+          placeholderTextColor="#9ca3af"
           value={searchQuery}
           onChangeText={setSearchQuery}
+          clearButtonMode="while-editing"
         />
         {searchQuery.length > 0 && (
           <Pressable onPress={() => setSearchQuery("")} style={styles.clearSearchButton}>
@@ -68,20 +111,23 @@ export default function SearchScreen() {
         )}
       </View>
 
-      {/* Tag Filter Chips */}
+      {/* Tag Filters */}
       <View style={styles.filterSection}>
-        <Text style={styles.filterTitle}>Filter by Tag</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
+        <Text style={styles.filterSectionTitle}>Filter by Tag</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagScroll}>
           {ALL_TAGS.map((tag) => {
-            const isSelected = selectedTag === tag;
+            const isSelected = selectedTag === tag.toLowerCase();
             return (
               <Pressable
                 key={tag}
                 style={[styles.filterChip, isSelected && styles.filterChipActive]}
-                onPress={() => setSelectedTag(isSelected ? null : tag)}
+                onPress={() => setSelectedTag(isSelected ? null : tag.toLowerCase())}
               >
                 <Text
-                  style={[styles.filterChipText, isSelected && styles.filterChipTextActive]}
+                  style={[
+                    styles.filterChipText,
+                    isSelected && styles.filterChipTextActive,
+                  ]}
                 >
                   #{tag}
                 </Text>
@@ -91,26 +137,26 @@ export default function SearchScreen() {
         </ScrollView>
       </View>
 
-      {/* Mood Filter Row */}
+      {/* Mood Filters */}
       <View style={styles.filterSection}>
-        <Text style={styles.filterTitle}>Filter by Mood</Text>
+        <Text style={styles.filterSectionTitle}>Filter by Mood</Text>
         <View style={styles.moodRow}>
-          {MOOD_OPTIONS.map((m) => {
-            const isSelected = selectedMood === m.level;
+          {MOOD_OPTIONS.map((opt) => {
+            const isSelected = selectedMood === opt.level;
             return (
               <Pressable
-                key={m.level}
-                style={[styles.moodFilterPill, isSelected && styles.moodFilterPillActive]}
-                onPress={() => setSelectedMood(isSelected ? null : m.level)}
+                key={opt.level}
+                style={[styles.moodChip, isSelected && styles.moodChipActive]}
+                onPress={() => setSelectedMood(isSelected ? null : opt.level)}
               >
-                <Text style={styles.moodFilterEmoji}>{m.emoji}</Text>
+                <Text style={styles.moodEmoji}>{opt.emoji}</Text>
                 <Text
                   style={[
-                    styles.moodFilterLabel,
-                    isSelected && styles.moodFilterLabelActive,
+                    styles.moodLabel,
+                    isSelected && styles.moodLabelActive,
                   ]}
                 >
-                  {m.label}
+                  {opt.label}
                 </Text>
               </Pressable>
             );
@@ -118,58 +164,57 @@ export default function SearchScreen() {
         </View>
       </View>
 
-      {/* Results Header */}
-      <View style={styles.resultsHeader}>
-        <Text style={styles.resultsCount}>
-          {results.length} {results.length === 1 ? "Result" : "Results"}
+      {/* Active Filter Clear Header */}
+      <View style={styles.resultHeader}>
+        <Text style={styles.resultCount}>
+          {loading ? "Searching..." : `${results.length} result${results.length === 1 ? "" : "s"}`}
         </Text>
         {hasActiveFilters && (
-          <Pressable onPress={clearFilters}>
-            <Text style={styles.resetText}>Reset Filters</Text>
+          <Pressable onPress={clearFilters} style={styles.clearAllButton}>
+            <Text style={styles.clearAllText}>Reset filters</Text>
           </Pressable>
         )}
       </View>
 
       {/* Results List */}
-      {results.length === 0 ? (
+      {loading ? (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="small" color="#6366f1" />
+        </View>
+      ) : results.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyIcon}>🔍</Text>
-          <Text style={styles.emptyTitle}>No matching entries found</Text>
-          <Text style={styles.emptySubtitle}>
-            Try adjusting your search terms or clearing tag and mood filters.
-          </Text>
+          <Text style={styles.emptyTitle}>No matching entries</Text>
+          <Text style={styles.emptySubtitle}>Try adjusting your keywords or clearing the filters.</Text>
         </View>
       ) : (
-        results.map((entry) => {
-          const moodOpt = MOOD_OPTIONS.find((m) => m.level === entry.mood);
-          return (
-            <View key={entry.id} style={styles.resultCard}>
-              <View style={styles.cardHeader}>
-                <Text style={styles.resultDate}>{entry.entryDate}</Text>
-                {moodOpt && (
-                  <View style={styles.moodBadge}>
-                    <Text style={styles.moodBadgeEmoji}>{moodOpt.emoji}</Text>
-                    <Text style={styles.moodBadgeText}>{moodOpt.label}</Text>
-                  </View>
-                )}
-              </View>
-              <Text style={styles.resultTitle}>{entry.title}</Text>
-              <Text style={styles.resultBody} numberOfLines={2}>
-                {entry.body}
-              </Text>
-              <View style={styles.cardFooter}>
-                <View style={styles.tagsWrap}>
-                  {entry.tags.map((t) => (
-                    <Text key={t} style={styles.resultTag}>
-                      #{t}
-                    </Text>
-                  ))}
-                </View>
-                {entry.isFavorite && <Text style={styles.favBadge}>⭐</Text>}
-              </View>
+        results.map((entry) => (
+          <View key={entry.id} style={styles.resultCard}>
+            <View style={styles.cardTopRow}>
+              <Text style={styles.dateText}>{entry.entryDate}</Text>
+              {entry.mood && (
+                <Text style={styles.cardMood}>
+                  {MOOD_OPTIONS.find((m) => m.level === entry.mood)?.emoji}
+                </Text>
+              )}
             </View>
-          );
-        })
+
+            {entry.title ? <Text style={styles.cardHeadline}>{entry.title}</Text> : null}
+            <Text style={styles.cardBody} numberOfLines={3}>
+              {entry.body}
+            </Text>
+
+            {entry.tags.length > 0 && (
+              <View style={styles.tagsRow}>
+                {entry.tags.map((t) => (
+                  <Text key={t} style={styles.tagText}>
+                    #{t}
+                  </Text>
+                ))}
+              </View>
+            )}
+          </View>
+        ))
       )}
     </ScrollView>
   );
@@ -178,14 +223,18 @@ export default function SearchScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#f9fafb",
   },
   contentContainer: {
     padding: 16,
     paddingBottom: 40,
-    maxWidth: 680,
+    maxWidth: 720,
     width: "100%",
     alignSelf: "center",
+  },
+  centerContainer: {
+    paddingVertical: 30,
+    alignItems: "center",
   },
   searchBarContainer: {
     flexDirection: "row",
@@ -193,15 +242,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffffff",
     borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 10,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: "#e5e7eb",
     marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
   },
   searchIcon: {
     fontSize: 16,
@@ -209,102 +252,104 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
+    paddingVertical: 12,
     fontSize: 15,
-    color: "#0f172a",
-    paddingVertical: 2,
+    color: "#111827",
   },
   clearSearchButton: {
-    padding: 4,
+    padding: 6,
   },
   clearSearchText: {
+    color: "#9ca3af",
     fontSize: 14,
-    color: "#94a3b8",
     fontWeight: "700",
   },
   filterSection: {
     marginBottom: 14,
   },
-  filterTitle: {
+  filterSectionTitle: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#64748b",
+    color: "#4b5563",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
     marginBottom: 8,
+    letterSpacing: 0.3,
   },
-  chipsScroll: {
+  tagScroll: {
     flexDirection: "row",
   },
   filterChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
     backgroundColor: "#ffffff",
     borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginRight: 8,
+    borderColor: "#e5e7eb",
+    marginRight: 6,
   },
   filterChipActive: {
-    backgroundColor: "#0284c7",
-    borderColor: "#0284c7",
+    backgroundColor: "#4f46e5",
+    borderColor: "#4f46e5",
   },
   filterChipText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#475569",
+    color: "#4b5563",
   },
   filterChipTextActive: {
     color: "#ffffff",
   },
   moodRow: {
     flexDirection: "row",
-    gap: 8,
+    justifyContent: "space-between",
+    gap: 6,
   },
-  moodFilterPill: {
+  moodChip: {
     flex: 1,
     alignItems: "center",
+    paddingVertical: 8,
+    borderRadius: 10,
     backgroundColor: "#ffffff",
-    borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
-    paddingVertical: 6,
+    borderColor: "#e5e7eb",
   },
-  moodFilterPillActive: {
-    backgroundColor: "#e0f2fe",
-    borderColor: "#0284c7",
+  moodChipActive: {
+    backgroundColor: "#e0e7ff",
+    borderColor: "#6366f1",
   },
-  moodFilterEmoji: {
+  moodEmoji: {
     fontSize: 16,
     marginBottom: 2,
   },
-  moodFilterLabel: {
-    fontSize: 10,
+  moodLabel: {
+    fontSize: 11,
+    color: "#4b5563",
     fontWeight: "600",
-    color: "#64748b",
   },
-  moodFilterLabelActive: {
-    color: "#0284c7",
+  moodLabelActive: {
+    color: "#4338ca",
     fontWeight: "700",
   },
-  resultsHeader: {
+  resultHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginTop: 8,
     marginBottom: 12,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: "#e2e8f0",
   },
-  resultsCount: {
-    fontSize: 13,
+  resultCount: {
+    fontSize: 14,
     fontWeight: "700",
-    color: "#334155",
+    color: "#374151",
   },
-  resetText: {
+  clearAllButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  clearAllText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#0284c7",
+    color: "#ef4444",
   },
   resultCard: {
     backgroundColor: "#ffffff",
@@ -312,82 +357,63 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: "#e5e7eb",
   },
-  cardHeader: {
+  cardTopRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 6,
-  },
-  resultDate: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#64748b",
-  },
-  moodBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f8fafc",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    gap: 4,
-  },
-  moodBadgeEmoji: {
-    fontSize: 12,
-  },
-  moodBadgeText: {
-    fontSize: 10,
-    color: "#475569",
-    fontWeight: "600",
-  },
-  resultTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#0f172a",
     marginBottom: 4,
   },
-  resultBody: {
+  dateText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#6b7280",
+    textTransform: "uppercase",
+  },
+  cardMood: {
+    fontSize: 16,
+  },
+  cardHeadline: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 4,
+  },
+  cardBody: {
     fontSize: 13,
+    color: "#374151",
     lineHeight: 18,
-    color: "#475569",
-    marginBottom: 8,
   },
-  cardFooter: {
+  tagsRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  tagsWrap: {
-    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 6,
+    marginTop: 8,
   },
-  resultTag: {
+  tagText: {
     fontSize: 11,
-    color: "#64748b",
-    fontWeight: "500",
-  },
-  favBadge: {
-    fontSize: 13,
+    fontWeight: "600",
+    color: "#6366f1",
   },
   emptyContainer: {
+    paddingVertical: 50,
     alignItems: "center",
-    paddingVertical: 48,
   },
   emptyIcon: {
-    fontSize: 36,
+    fontSize: 40,
     marginBottom: 10,
   },
   emptyTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "700",
-    color: "#0f172a",
+    color: "#111827",
     marginBottom: 4,
   },
   emptySubtitle: {
     fontSize: 13,
-    color: "#64748b",
+    color: "#6b7280",
     textAlign: "center",
+    maxWidth: 280,
   },
 });

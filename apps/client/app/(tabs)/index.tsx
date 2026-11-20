@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -9,54 +10,203 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { ALL_TAGS, ENERGY_OPTIONS, INITIAL_TODAY_ENTRY, MOOD_OPTIONS } from "../../src/mockData";
-import { EnergyLevel, JournalEntryMock, MoodLevel } from "../../src/types";
+import { api } from "../../src/api/client";
+import { ALL_TAGS, ENERGY_OPTIONS, MOOD_OPTIONS } from "../../src/mockData";
+import { JournalEntryResponse } from "@myday/contracts";
+
+function getTodayString() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function shiftDateString(dateStr: string, offsetDays: number) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  date.setDate(date.getDate() + offsetDays);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 export default function TodayScreen() {
-  const [entry, setEntry] = useState<JournalEntryMock>(INITIAL_TODAY_ENTRY);
-  const [saveStatus, setSaveStatus] = useState<"synced" | "draft" | "saving">("draft");
+  const [currentDate, setCurrentDate] = useState(getTodayString());
+  const [loading, setLoading] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"synced" | "draft" | "saving" | "error">("synced");
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  // Form State
+  const [entryId, setEntryId] = useState<string | null>(null);
+  const [revision, setRevision] = useState<number>(1);
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [mood, setMood] = useState<number | null>(4);
+  const [energy, setEnergy] = useState<number | null>(4);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [selectedTags, setSelectedTags] = useState<string[]>(["reflection"]);
   const [newTagInput, setNewTagInput] = useState("");
 
-  const updateSection = (
-    type: "highlights" | "gratitude" | "learned" | "tomorrow",
-    content: string
-  ) => {
-    setEntry((prev) => {
-      const existing = prev.sections.find((s) => s.sectionType === type);
-      const updatedSections = existing
-        ? prev.sections.map((s) => (s.sectionType === type ? { ...s, content } : s))
-        : [...prev.sections, { id: `sec-${Date.now()}`, sectionType: type, content }];
-      return { ...prev, sections: updatedSections };
-    });
-    setSaveStatus("draft");
+  // Structured Reflection Sections
+  const [highlights, setHighlights] = useState("");
+  const [gratitude, setGratitude] = useState("");
+  const [learned, setLearlearned] = useState("");
+  const [tomorrow, setTomorrow] = useState("");
+
+  // AI Prompt State
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState<string | null>(null);
+
+  // Load entry for currentDate
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchEntry() {
+      setLoading(true);
+      setStatusMessage(null);
+      try {
+        const found = await api.getEntryByDate(currentDate);
+        if (cancelled) return;
+        if (found) {
+          setEntryId(found.id);
+          setRevision(found.revision);
+          setTitle(found.title || "");
+          setBody(found.body || "");
+          setMood(found.mood || null);
+          setEnergy(found.energy || null);
+          setIsFavorite(found.isFavorite);
+          setSelectedTags(found.tags || []);
+
+          // Sections
+          const h = found.sections.find((s) => s.sectionType === "highlights")?.content || "";
+          const g = found.sections.find((s) => s.sectionType === "gratitude")?.content || "";
+          const l = found.sections.find((s) => s.sectionType === "learned")?.content || "";
+          const t = found.sections.find((s) => s.sectionType === "tomorrow")?.content || "";
+          setHighlights(h);
+          setGratitude(g);
+          setLearlearned(l);
+          setTomorrow(t);
+          setSaveStatus("synced");
+        } else {
+          // Reset for fresh entry
+          setEntryId(null);
+          setRevision(1);
+          setTitle("");
+          setBody("");
+          setMood(4);
+          setEnergy(4);
+          setIsFavorite(false);
+          setSelectedTags(["reflection"]);
+          setHighlights("");
+          setGratitude("");
+          setLearlearned("");
+          setTomorrow("");
+          setSaveStatus("draft");
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setStatusMessage("Working offline. Local draft mode.");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    fetchEntry();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentDate]);
+
+  const handleSave = async () => {
+    if (!body.trim()) {
+      setStatusMessage("Journal body is required to save.");
+      return;
+    }
+
+    setSaveStatus("saving");
+    setStatusMessage(null);
+
+    const sections = [
+      highlights ? { sectionType: "highlights" as const, content: highlights, sortOrder: 0 } : null,
+      gratitude ? { sectionType: "gratitude" as const, content: gratitude, sortOrder: 1 } : null,
+      learned ? { sectionType: "learned" as const, content: learned, sortOrder: 2 } : null,
+      tomorrow ? { sectionType: "tomorrow" as const, content: tomorrow, sortOrder: 3 } : null,
+    ].filter(Boolean) as any[];
+
+    try {
+      if (entryId) {
+        const updated = await api.updateEntry(entryId, {
+          baseRevision: revision,
+          title: title.trim() || null,
+          body: body.trim(),
+          mood,
+          energy,
+          isFavorite,
+          sections,
+          tags: selectedTags,
+        });
+        setRevision(updated.revision);
+        setSaveStatus("synced");
+        setStatusMessage("Entry saved!");
+      } else {
+        const created = await api.createEntry({
+          entryDate: currentDate,
+          title: title.trim() || null,
+          body: body.trim(),
+          mood,
+          energy,
+          status: "published",
+          isFavorite,
+          sections,
+          tags: selectedTags,
+        });
+        setEntryId(created.id);
+        setRevision(created.revision);
+        setSaveStatus("synced");
+        setStatusMessage("Entry created!");
+      }
+    } catch (err: any) {
+      setSaveStatus("error");
+      if (err.code === "CONFLICT") {
+        setStatusMessage("Conflict: Entry was updated elsewhere. Please refresh.");
+      } else {
+        setStatusMessage(err.message || "Failed to save entry.");
+      }
+    }
   };
 
-  const getSectionContent = (type: "highlights" | "gratitude" | "learned" | "tomorrow") => {
-    return entry.sections.find((s) => s.sectionType === type)?.content || "";
+  const handleAiReflection = async () => {
+    setAiLoading(true);
+    try {
+      const res = await api.getAiReflection({
+        promptType: "reflection",
+        mood: mood || undefined,
+        tags: selectedTags,
+        entryContext: body.slice(0, 500),
+      });
+      setAiPrompt(res.prompt);
+    } catch {
+      setAiPrompt("What is the single most meaningful event that shaped your mood today?");
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   const toggleTag = (tag: string) => {
-    setEntry((prev) => {
-      const exists = prev.tags.includes(tag);
-      const tags = exists ? prev.tags.filter((t) => t !== tag) : [...prev.tags, tag];
-      return { ...prev, tags };
-    });
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
     setSaveStatus("draft");
   };
 
   const handleAddCustomTag = () => {
-    const trimmed = newTagInput.trim();
-    if (!trimmed || entry.tags.includes(trimmed)) return;
-    setEntry((prev) => ({ ...prev, tags: [...prev.tags, trimmed] }));
+    const trimmed = newTagInput.trim().toLowerCase();
+    if (!trimmed || selectedTags.includes(trimmed)) return;
+    setSelectedTags((prev) => [...prev, trimmed]);
     setNewTagInput("");
     setSaveStatus("draft");
-  };
-
-  const handleSave = () => {
-    setSaveStatus("saving");
-    setTimeout(() => {
-      setSaveStatus("synced");
-    }, 400);
   };
 
   return (
@@ -69,19 +219,48 @@ export default function TodayScreen() {
         contentContainerStyle={styles.contentContainer}
         keyboardShouldPersistTaps="handled"
       >
+        {/* Date Navigation Bar */}
+        <View style={styles.dateNavRow}>
+          <Pressable
+            style={styles.dateNavButton}
+            onPress={() => setCurrentDate((d) => shiftDateString(d, -1))}
+          >
+            <Text style={styles.dateNavButtonText}>‹ Previous</Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.todayButton}
+            onPress={() => setCurrentDate(getTodayString())}
+          >
+            <Text style={styles.todayButtonText}>
+              {currentDate === getTodayString() ? "● Today" : "Jump to Today"}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.dateNavButton}
+            onPress={() => setCurrentDate((d) => shiftDateString(d, 1))}
+          >
+            <Text style={styles.dateNavButtonText}>Next ›</Text>
+          </Pressable>
+        </View>
+
         {/* Header Bar */}
         <View style={styles.headerRow}>
           <View>
-            <Text style={styles.dateSubtitle}>{entry.entryDate}</Text>
-            <Text style={styles.headerTitle}>Daily Reflection</Text>
+            <Text style={styles.dateSubtitle}>{currentDate}</Text>
+            <Text style={styles.headerTitle}>Daily Journal</Text>
           </View>
           <View style={styles.headerRight}>
             <Pressable
               style={styles.favoriteButton}
-              onPress={() => setEntry((p) => ({ ...p, isFavorite: !p.isFavorite }))}
+              onPress={() => {
+                setIsFavorite((f) => !f);
+                setSaveStatus("draft");
+              }}
               accessibilityLabel="Toggle Favorite"
             >
-              <Text style={styles.favoriteIcon}>{entry.isFavorite ? "⭐" : "☆"}</Text>
+              <Text style={styles.favoriteIcon}>{isFavorite ? "★" : "☆"}</Text>
             </Pressable>
             <View
               style={[
@@ -90,6 +269,8 @@ export default function TodayScreen() {
                   ? styles.statusSynced
                   : saveStatus === "saving"
                   ? styles.statusSaving
+                  : saveStatus === "error"
+                  ? styles.statusError
                   : styles.statusDraft,
               ]}
             >
@@ -98,249 +279,252 @@ export default function TodayScreen() {
                   styles.statusText,
                   saveStatus === "synced"
                     ? styles.statusTextSynced
-                    : saveStatus === "saving"
-                    ? styles.statusTextSaving
                     : styles.statusTextDraft,
                 ]}
               >
                 {saveStatus === "synced"
                   ? "✓ Saved"
                   : saveStatus === "saving"
-                  ? "Saving…"
-                  : "• Draft"}
+                  ? "Saving..."
+                  : saveStatus === "error"
+                  ? "Error"
+                  : "Draft"}
               </Text>
             </View>
           </View>
         </View>
 
-        {/* Title Input */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.inputLabel}>Headline</Text>
-          <TextInput
-            style={styles.titleInput}
-            placeholder="Sum up today in one thought..."
-            placeholderTextColor="#94a3b8"
-            value={entry.title}
-            onChangeText={(title) => {
-              setEntry((p) => ({ ...p, title }));
-              setSaveStatus("draft");
-            }}
-          />
-        </View>
+        {statusMessage && (
+          <View style={styles.notificationBanner}>
+            <Text style={styles.notificationText}>{statusMessage}</Text>
+          </View>
+        )}
 
-        {/* Main Body */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.inputLabel}>Journal Entry</Text>
-          <TextInput
-            style={styles.bodyInput}
-            placeholder="Write freely about today... thoughts, milestones, feelings."
-            placeholderTextColor="#94a3b8"
-            multiline
-            numberOfLines={6}
-            textAlignVertical="top"
-            value={entry.body}
-            onChangeText={(body) => {
-              setEntry((p) => ({ ...p, body }));
-              setSaveStatus("draft");
-            }}
-          />
-        </View>
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#6366f1" />
+            <Text style={styles.loadingText}>Loading entry for {currentDate}...</Text>
+          </View>
+        ) : (
+          <>
+            {/* Title / Headline */}
+            <View style={styles.card}>
+              <Text style={styles.fieldLabel}>Headline</Text>
+              <TextInput
+                style={styles.titleInput}
+                placeholder="Give today a title or theme..."
+                placeholderTextColor="#9ca3af"
+                value={title}
+                onChangeText={(t) => {
+                  setTitle(t);
+                  setSaveStatus("draft");
+                }}
+              />
+            </View>
 
-        {/* Mood Selector */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.inputLabel}>Mood</Text>
-          <View style={styles.pillRow}>
-            {MOOD_OPTIONS.map((opt) => {
-              const isSelected = entry.mood === opt.level;
-              return (
+            {/* AI Reflection Prompt Banner */}
+            <View style={styles.aiCard}>
+              <View style={styles.aiHeaderRow}>
+                <Text style={styles.aiHeading}>✨ Groq AI Reflection Guide</Text>
                 <Pressable
-                  key={opt.level}
-                  style={[
-                    styles.moodButton,
-                    isSelected && styles.moodButtonSelected,
-                    isSelected && { borderColor: opt.color },
-                  ]}
-                  onPress={() => {
-                    setEntry((p) => ({ ...p, mood: opt.level as MoodLevel }));
-                    setSaveStatus("draft");
-                  }}
+                  style={styles.aiButton}
+                  onPress={handleAiReflection}
+                  disabled={aiLoading}
                 >
-                  <Text style={styles.moodEmoji}>{opt.emoji}</Text>
-                  <Text
-                    style={[
-                      styles.moodLabel,
-                      isSelected && styles.moodLabelSelected,
-                    ]}
-                  >
-                    {opt.label}
-                  </Text>
+                  {aiLoading ? (
+                    <ActivityIndicator size="small" color="#ffffff" />
+                  ) : (
+                    <Text style={styles.aiButtonText}>Ask AI</Text>
+                  )}
                 </Pressable>
-              );
-            })}
-          </View>
-        </View>
+              </View>
+              {aiPrompt && <Text style={styles.aiPromptText}>{aiPrompt}</Text>}
+            </View>
 
-        {/* Energy Selector */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.inputLabel}>Energy Level</Text>
-          <View style={styles.pillRow}>
-            {ENERGY_OPTIONS.map((opt) => {
-              const isSelected = entry.energy === opt.level;
-              return (
-                <Pressable
-                  key={opt.level}
-                  style={[
-                    styles.energyButton,
-                    isSelected && styles.energyButtonSelected,
-                  ]}
-                  onPress={() => {
-                    setEntry((p) => ({ ...p, energy: opt.level as EnergyLevel }));
-                    setSaveStatus("draft");
-                  }}
-                >
-                  <Text
+            {/* Journal Body */}
+            <View style={styles.card}>
+              <Text style={styles.fieldLabel}>Main Entry</Text>
+              <TextInput
+                style={styles.bodyInput}
+                placeholder="What happened today? How are you feeling?"
+                placeholderTextColor="#9ca3af"
+                multiline
+                numberOfLines={6}
+                textAlignVertical="top"
+                value={body}
+                onChangeText={(b) => {
+                  setBody(b);
+                  setSaveStatus("draft");
+                }}
+              />
+            </View>
+
+            {/* Mood & Energy Selectors */}
+            <View style={styles.card}>
+              <Text style={styles.fieldLabel}>Mood</Text>
+              <View style={styles.optionsRow}>
+                {MOOD_OPTIONS.map((opt) => (
+                  <Pressable
+                    key={opt.level}
                     style={[
-                      styles.energyBars,
-                      isSelected && styles.energyBarsSelected,
+                      styles.optionChip,
+                      mood === opt.level && styles.optionChipSelected,
                     ]}
+                    onPress={() => {
+                      setMood(opt.level);
+                      setSaveStatus("draft");
+                    }}
                   >
-                    {opt.bars}
-                  </Text>
-                  <Text
+                    <Text style={styles.optionEmoji}>{opt.emoji}</Text>
+                    <Text
+                      style={[
+                        styles.optionLabel,
+                        mood === opt.level && styles.optionLabelSelected,
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Energy</Text>
+              <View style={styles.optionsRow}>
+                {ENERGY_OPTIONS.map((opt) => (
+                  <Pressable
+                    key={opt.level}
                     style={[
-                      styles.energyLabel,
-                      isSelected && styles.energyLabelSelected,
+                      styles.optionChip,
+                      energy === opt.level && styles.optionChipSelected,
                     ]}
+                    onPress={() => {
+                      setEnergy(opt.level);
+                      setSaveStatus("draft");
+                    }}
                   >
-                    {opt.label}
-                  </Text>
+                    <Text style={styles.optionEmoji}>{opt.bars}</Text>
+                    <Text
+                      style={[
+                        styles.optionLabel,
+                        energy === opt.level && styles.optionLabelSelected,
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            {/* Structured Reflection Sections */}
+            <View style={styles.card}>
+              <Text style={styles.sectionHeader}>Structured Reflections</Text>
+
+              <Text style={styles.sectionSubtitle}>🌟 Daily Highlights</Text>
+              <TextInput
+                style={styles.sectionInput}
+                placeholder="Key moments, wins, or accomplishments..."
+                placeholderTextColor="#9ca3af"
+                multiline
+                value={highlights}
+                onChangeText={(t) => {
+                  setHighlights(t);
+                  setSaveStatus("draft");
+                }}
+              />
+
+              <Text style={[styles.sectionSubtitle, { marginTop: 12 }]}>🙏 Gratitude</Text>
+              <TextInput
+                style={styles.sectionInput}
+                placeholder="Things, people, or moments you are grateful for..."
+                placeholderTextColor="#9ca3af"
+                multiline
+                value={gratitude}
+                onChangeText={(t) => {
+                  setGratitude(t);
+                  setSaveStatus("draft");
+                }}
+              />
+
+              <Text style={[styles.sectionSubtitle, { marginTop: 12 }]}>💡 Lessons Learned</Text>
+              <TextInput
+                style={styles.sectionInput}
+                placeholder="Insights or takeaways from today..."
+                placeholderTextColor="#9ca3af"
+                multiline
+                value={learned}
+                onChangeText={(t) => {
+                  setLearlearned(t);
+                  setSaveStatus("draft");
+                }}
+              />
+
+              <Text style={[styles.sectionSubtitle, { marginTop: 12 }]}>🎯 Tomorrow Intention</Text>
+              <TextInput
+                style={styles.sectionInput}
+                placeholder="Focus, intention, or priority for tomorrow..."
+                placeholderTextColor="#9ca3af"
+                multiline
+                value={tomorrow}
+                onChangeText={(t) => {
+                  setTomorrow(t);
+                  setSaveStatus("draft");
+                }}
+              />
+            </View>
+
+            {/* Tags Section */}
+            <View style={styles.card}>
+              <Text style={styles.fieldLabel}>Tags</Text>
+              <View style={styles.tagsContainer}>
+                {ALL_TAGS.map((tag) => {
+                  const isSelected = selectedTags.includes(tag.toLowerCase());
+                  return (
+                    <Pressable
+                      key={tag}
+                      style={[styles.tagPill, isSelected && styles.tagPillSelected]}
+                      onPress={() => toggleTag(tag.toLowerCase())}
+                    >
+                      <Text
+                        style={[
+                          styles.tagPillText,
+                          isSelected && styles.tagPillTextSelected,
+                        ]}
+                      >
+                        #{tag}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <View style={styles.addTagRow}>
+                <TextInput
+                  style={styles.addTagInput}
+                  placeholder="Add custom tag..."
+                  placeholderTextColor="#9ca3af"
+                  value={newTagInput}
+                  onChangeText={setNewTagInput}
+                  onSubmitEditing={handleAddCustomTag}
+                />
+                <Pressable style={styles.addTagButton} onPress={handleAddCustomTag}>
+                  <Text style={styles.addTagButtonText}>+ Add</Text>
                 </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* Structured Reflections Header */}
-        <Text style={styles.reflectionsGroupTitle}>Structured Reflections</Text>
-
-        {/* 1. Highlights */}
-        <View style={styles.reflectionCard}>
-          <View style={styles.reflectionHeader}>
-            <Text style={styles.reflectionIcon}>🌟</Text>
-            <View>
-              <Text style={styles.reflectionTitle}>Highlights</Text>
-              <Text style={styles.reflectionSubtitle}>What went well or felt meaningful?</Text>
+              </View>
             </View>
-          </View>
-          <TextInput
-            style={styles.reflectionInput}
-            placeholder="A win, connection, or breakthrough..."
-            placeholderTextColor="#94a3b8"
-            multiline
-            value={getSectionContent("highlights")}
-            onChangeText={(txt) => updateSection("highlights", txt)}
-          />
-        </View>
 
-        {/* 2. Gratitude */}
-        <View style={styles.reflectionCard}>
-          <View style={styles.reflectionHeader}>
-            <Text style={styles.reflectionIcon}>🙏</Text>
-            <View>
-              <Text style={styles.reflectionTitle}>Gratitude</Text>
-              <Text style={styles.reflectionSubtitle}>What or who are you thankful for?</Text>
-            </View>
-          </View>
-          <TextInput
-            style={styles.reflectionInput}
-            placeholder="Small joys, kindnesses, blessings..."
-            placeholderTextColor="#94a3b8"
-            multiline
-            value={getSectionContent("gratitude")}
-            onChangeText={(txt) => updateSection("gratitude", txt)}
-          />
-        </View>
-
-        {/* 3. Learned */}
-        <View style={styles.reflectionCard}>
-          <View style={styles.reflectionHeader}>
-            <Text style={styles.reflectionIcon}>💡</Text>
-            <View>
-              <Text style={styles.reflectionTitle}>Lessons & Insights</Text>
-              <Text style={styles.reflectionSubtitle}>What did today teach you?</Text>
-            </View>
-          </View>
-          <TextInput
-            style={styles.reflectionInput}
-            placeholder="A takeaway, realization, or adjustment..."
-            placeholderTextColor="#94a3b8"
-            multiline
-            value={getSectionContent("learned")}
-            onChangeText={(txt) => updateSection("learned", txt)}
-          />
-        </View>
-
-        {/* 4. Tomorrow Intention */}
-        <View style={styles.reflectionCard}>
-          <View style={styles.reflectionHeader}>
-            <Text style={styles.reflectionIcon}>🎯</Text>
-            <View>
-              <Text style={styles.reflectionTitle}>Tomorrow's Intention</Text>
-              <Text style={styles.reflectionSubtitle}>What is your primary focus for tomorrow?</Text>
-            </View>
-          </View>
-          <TextInput
-            style={styles.reflectionInput}
-            placeholder="The single most important objective..."
-            placeholderTextColor="#94a3b8"
-            multiline
-            value={getSectionContent("tomorrow")}
-            onChangeText={(txt) => updateSection("tomorrow", txt)}
-          />
-        </View>
-
-        {/* Tags */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.inputLabel}>Tags</Text>
-          <View style={styles.tagChipsWrap}>
-            {ALL_TAGS.map((tag) => {
-              const selected = entry.tags.includes(tag);
-              return (
-                <Pressable
-                  key={tag}
-                  style={[styles.tagChip, selected && styles.tagChipSelected]}
-                  onPress={() => toggleTag(tag)}
-                >
-                  <Text style={[styles.tagChipText, selected && styles.tagChipTextSelected]}>
-                    #{tag}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          {/* Custom tag input */}
-          <View style={styles.customTagRow}>
-            <TextInput
-              style={styles.customTagInput}
-              placeholder="Add custom tag..."
-              placeholderTextColor="#94a3b8"
-              value={newTagInput}
-              onChangeText={setNewTagInput}
-              onSubmitEditing={handleAddCustomTag}
-            />
-            <Pressable style={styles.addTagButton} onPress={handleAddCustomTag}>
-              <Text style={styles.addTagButtonText}>+ Add</Text>
+            {/* Save Entry CTA */}
+            <Pressable
+              style={[styles.saveButton, saveStatus === "saving" && styles.saveButtonDisabled]}
+              onPress={handleSave}
+              disabled={saveStatus === "saving"}
+            >
+              <Text style={styles.saveButtonText}>
+                {saveStatus === "saving" ? "Saving..." : "Save Journal Entry"}
+              </Text>
             </Pressable>
-          </View>
-        </View>
-
-        {/* Action Button */}
-        <Pressable style={styles.saveButton} onPress={handleSave}>
-          <Text style={styles.saveButtonText}>
-            {saveStatus === "saving" ? "Saving Entry..." : "Save Today's Entry"}
-          </Text>
-        </Pressable>
+          </>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -349,7 +533,7 @@ export default function TodayScreen() {
 const styles = StyleSheet.create({
   keyboardContainer: {
     flex: 1,
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#f9fafb",
   },
   scrollView: {
     flex: 1,
@@ -357,9 +541,42 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: 16,
     paddingBottom: 40,
-    maxWidth: 680,
+    maxWidth: 720,
     width: "100%",
     alignSelf: "center",
+  },
+  dateNavRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    padding: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  dateNavButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: "#f3f4f6",
+  },
+  dateNavButtonText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#4b5563",
+  },
+  todayButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: "#e0e7ff",
+  },
+  todayButtonText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#4f46e5",
   },
   headerRow: {
     flexDirection: "row",
@@ -370,15 +587,14 @@ const styles = StyleSheet.create({
   dateSubtitle: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#64748b",
+    color: "#6b7280",
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#0f172a",
-    marginTop: 2,
+    fontSize: 24,
+    fontWeight: "800",
+    color: "#111827",
   },
   headerRight: {
     flexDirection: "row",
@@ -387,244 +603,249 @@ const styles = StyleSheet.create({
   },
   favoriteButton: {
     padding: 6,
-    borderRadius: 8,
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
   },
   favoriteIcon: {
-    fontSize: 18,
+    fontSize: 22,
+    color: "#f59e0b",
   },
   statusPill: {
     paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
+    paddingVertical: 4,
+    borderRadius: 20,
   },
   statusSynced: {
-    backgroundColor: "#dcfce7",
+    backgroundColor: "#d1fae5",
   },
   statusSaving: {
-    backgroundColor: "#fef9c3",
+    backgroundColor: "#fef3c7",
   },
   statusDraft: {
-    backgroundColor: "#f1f5f9",
+    backgroundColor: "#e5e7eb",
+  },
+  statusError: {
+    backgroundColor: "#fee2e2",
   },
   statusText: {
     fontSize: 12,
     fontWeight: "600",
   },
   statusTextSynced: {
-    color: "#15803d",
-  },
-  statusTextSaving: {
-    color: "#a16207",
+    color: "#065f46",
   },
   statusTextDraft: {
-    color: "#64748b",
+    color: "#4b5563",
   },
-  sectionCard: {
+  notificationBanner: {
+    backgroundColor: "#eff6ff",
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+    marginBottom: 12,
+  },
+  notificationText: {
+    fontSize: 13,
+    color: "#1e40af",
+    textAlign: "center",
+  },
+  loadingContainer: {
+    paddingVertical: 40,
+    alignItems: "center",
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: "#6b7280",
+  },
+  card: {
     backgroundColor: "#ffffff",
     borderRadius: 14,
     padding: 16,
-    marginBottom: 14,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: "#e5e7eb",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  inputLabel: {
-    fontSize: 13,
+  aiCard: {
+    backgroundColor: "#faf5ff",
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#e9d5ff",
+  },
+  aiHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  aiHeading: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#7e22ce",
+  },
+  aiButton: {
+    backgroundColor: "#9333ea",
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
+  aiButtonText: {
+    color: "#ffffff",
+    fontSize: 12,
     fontWeight: "600",
-    color: "#475569",
+  },
+  aiPromptText: {
+    marginTop: 10,
+    fontSize: 13,
+    fontStyle: "italic",
+    color: "#581c87",
+    lineHeight: 18,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#374151",
     marginBottom: 8,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
   },
   titleInput: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#0f172a",
+    color: "#111827",
     paddingVertical: 4,
   },
   bodyInput: {
     fontSize: 15,
+    color: "#1f2937",
     lineHeight: 22,
-    color: "#1e293b",
     minHeight: 120,
-    paddingVertical: 4,
   },
-  pillRow: {
+  optionsRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
+    justifyContent: "space-between",
+    gap: 6,
   },
-  moodButton: {
+  optionChip: {
     flex: 1,
-    minWidth: 54,
     alignItems: "center",
     paddingVertical: 10,
-    paddingHorizontal: 4,
     borderRadius: 10,
-    backgroundColor: "#f8fafc",
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: "#e5e7eb",
+    backgroundColor: "#f9fafb",
   },
-  moodButtonSelected: {
-    backgroundColor: "#f0fdf4",
-    borderWidth: 2,
+  optionChipSelected: {
+    borderColor: "#6366f1",
+    backgroundColor: "#e0e7ff",
   },
-  moodEmoji: {
-    fontSize: 22,
+  optionEmoji: {
+    fontSize: 18,
     marginBottom: 4,
   },
-  moodLabel: {
+  optionLabel: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#64748b",
+    color: "#4b5563",
   },
-  moodLabelSelected: {
-    color: "#0f172a",
+  optionLabelSelected: {
+    color: "#4338ca",
     fontWeight: "700",
   },
-  energyButton: {
-    flex: 1,
-    minWidth: 54,
-    alignItems: "center",
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: "#f8fafc",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  energyButtonSelected: {
-    backgroundColor: "#eff6ff",
-    borderColor: "#0284c7",
-    borderWidth: 2,
-  },
-  energyBars: {
-    fontSize: 14,
-    color: "#94a3b8",
-    marginBottom: 2,
-  },
-  energyBarsSelected: {
-    color: "#0284c7",
-  },
-  energyLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#64748b",
-  },
-  energyLabelSelected: {
-    color: "#0284c7",
-    fontWeight: "700",
-  },
-  reflectionsGroupTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#0f172a",
-    marginTop: 8,
+  sectionHeader: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#111827",
     marginBottom: 12,
   },
-  reflectionCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  reflectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 10,
-  },
-  reflectionIcon: {
-    fontSize: 22,
-  },
-  reflectionTitle: {
-    fontSize: 14,
+  sectionSubtitle: {
+    fontSize: 13,
     fontWeight: "700",
-    color: "#0f172a",
+    color: "#374151",
+    marginBottom: 6,
   },
-  reflectionSubtitle: {
-    fontSize: 12,
-    color: "#64748b",
-  },
-  reflectionInput: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: "#1e293b",
-    minHeight: 50,
-    backgroundColor: "#f8fafc",
+  sectionInput: {
+    backgroundColor: "#f9fafb",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
     borderRadius: 8,
     padding: 10,
+    fontSize: 14,
+    color: "#1f2937",
+    minHeight: 50,
   },
-  tagChipsWrap: {
+  tagsContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    gap: 6,
     marginBottom: 12,
   },
-  tagChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: "#f1f5f9",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
+  tagPill: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    backgroundColor: "#f3f4f6",
   },
-  tagChipSelected: {
-    backgroundColor: "#0284c7",
-    borderColor: "#0284c7",
+  tagPillSelected: {
+    backgroundColor: "#4f46e5",
   },
-  tagChipText: {
+  tagPillText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#475569",
+    color: "#4b5563",
   },
-  tagChipTextSelected: {
+  tagPillTextSelected: {
     color: "#ffffff",
   },
-  customTagRow: {
+  addTagRow: {
     flexDirection: "row",
     gap: 8,
   },
-  customTagInput: {
+  addTagInput: {
     flex: 1,
-    backgroundColor: "#f8fafc",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 13,
-    color: "#0f172a",
+    backgroundColor: "#f9fafb",
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: "#e5e7eb",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    fontSize: 13,
+    color: "#111827",
   },
   addTagButton: {
-    backgroundColor: "#f1f5f9",
+    backgroundColor: "#4f46e5",
     paddingHorizontal: 14,
     justifyContent: "center",
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
   },
   addTagButtonText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#0f172a",
+    color: "#ffffff",
+    fontWeight: "700",
+    fontSize: 12,
   },
   saveButton: {
-    backgroundColor: "#0284c7",
-    borderRadius: 12,
+    backgroundColor: "#4f46e5",
     paddingVertical: 14,
+    borderRadius: 12,
     alignItems: "center",
     marginTop: 8,
-    shadowColor: "#0284c7",
+    shadowColor: "#4f46e5",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  saveButtonDisabled: {
+    opacity: 0.6,
   },
   saveButtonText: {
     color: "#ffffff",
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "700",
   },
 });

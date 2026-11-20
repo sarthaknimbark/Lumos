@@ -3,6 +3,7 @@ import postgres from "postgres";
 import * as schema from "./schema.js";
 
 export * from "./schema.js";
+export * from "drizzle-orm";
 
 /**
  * Creates a typed Drizzle database instance from a connection URL

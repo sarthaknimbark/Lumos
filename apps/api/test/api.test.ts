@@ -1,3 +1,5 @@
+process.env.NODE_ENV = "test";
+
 import { buildApp } from "../src/app.js";
 import { Env } from "../src/config.js";
 
@@ -131,6 +133,45 @@ async function runTests() {
     const body = res.json();
     if (body.data.revision !== 2 || body.data.title !== "Updated Title") {
       throw new Error(`Unexpected update result: ${JSON.stringify(body)}`);
+    }
+  });
+
+  // 7b. Date navigation lookup
+  await test("GET /api/v1/entries/by-date/:date returns entry by local diary date", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/entries/by-date/2026-11-21",
+    });
+    if (res.statusCode !== 200) throw new Error(`Expected 200, got ${res.statusCode}: ${res.body}`);
+    const body = res.json();
+    if (body.data.entryDate !== "2026-11-21") {
+      throw new Error(`Expected entryDate 2026-11-21, got ${body.data.entryDate}`);
+    }
+  });
+
+  // 7c. Text search
+  await test("GET /api/v1/entries?q=pipeline matches entry body", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/entries?q=pipeline",
+    });
+    if (res.statusCode !== 200) throw new Error(`Expected 200, got ${res.statusCode}`);
+    const body = res.json();
+    if (!body.data.some((e: any) => e.id === createdId)) {
+      throw new Error("Expected search result to include createdId");
+    }
+  });
+
+  // 7d. Filter by mood & pagination
+  await test("GET /api/v1/entries with mood filter and pagination metadata", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/v1/entries?mood=5&limit=10&offset=0",
+    });
+    if (res.statusCode !== 200) throw new Error(`Expected 200, got ${res.statusCode}`);
+    const body = res.json();
+    if (!body.pagination || typeof body.pagination.total !== "number") {
+      throw new Error(`Expected pagination metadata, got: ${JSON.stringify(body)}`);
     }
   });
 

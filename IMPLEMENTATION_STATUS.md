@@ -1,6 +1,6 @@
 # Implementation Status
 
-Current status: Phase 4 complete. Ready for Phase 5 (Journal, calendar, search, mood, tags with database integration).
+Current status: Phase 5 complete. Ready for Phase 6 (Native/web offline drafts and sync).
 
 ## Phases
 - [x] 0 — Monorepo and tooling
@@ -8,7 +8,7 @@ Current status: Phase 4 complete. Ready for Phase 5 (Journal, calendar, search, 
 - [x] 2 — PostgreSQL + Drizzle persistence (schema, migrations & client ready; live migration deferred to target machine)
 - [x] 3 — API modules, OpenAPI & Groq Free AI integration
 - [x] 4 — Authentication and account isolation (Better Auth + Google Sign-In structure + SecureStore)
-- [ ] 5 — Journal, calendar, search, mood, tags
+- [x] 5 — Journal, calendar, search, mood, tags (Drizzle persistence + universal client integration)
 - [ ] 6 — Native/web offline drafts and sync
 - [ ] 7 — Google Drive backup and attachments
 - [ ] 8 — Google Calendar read-only integration
@@ -42,6 +42,14 @@ Current status: Phase 4 complete. Ready for Phase 5 (Journal, calendar, search, 
   - Added Auth DTO contracts in `packages/contracts/src/auth.ts`.
   - Added cross-user ownership isolation tests in `apps/api/test/api.test.ts` (cross-user read/update/delete returns 404). All 15 integration tests pass.
   - Full TypeScript typechecks clean across `packages/contracts`, `packages/db`, `apps/api`, and `apps/client`.
+- Phase 5: Journal, calendar, search, mood, and tags:
+  - Built unified `entryService.ts` supporting Drizzle PostgreSQL queries and in-memory store fallback.
+  - Enforced one main entry per local diary date (`entryDate`), revision-based optimistic concurrency (`baseRevision`), soft-delete, and structured sections (`highlights`, `gratitude`, `learned`, `tomorrow`).
+  - Implemented date navigation (`GET /api/v1/entries/by-date/:date`), offset pagination, mood/energy/tag/favorite filters, and full-text search.
+  - Universal client API layer built (`apps/client/src/api/client.ts`).
+  - Today screen updated with dynamic date navigation (`< Prev`, `Today`, `Next >`), Groq AI assistant trigger, mood/energy selectors, reflection sections, and live API saving.
+  - Timeline and Search screens updated with live API querying, favorites filtering, tag filtering, and debounced text search.
+  - 18 automated integration tests passing and 10 Expo static web routes cleanly exported.
 
 ## Manual Configuration Needed for Live Auth
 

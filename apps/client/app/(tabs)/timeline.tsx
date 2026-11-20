@@ -1,113 +1,173 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { api } from "../../src/api/client";
 import { MOOD_OPTIONS, PAST_ENTRIES_MOCK } from "../../src/mockData";
-import { JournalEntryMock } from "../../src/types";
+import { JournalEntryResponse } from "@myday/contracts";
 
 export default function TimelineScreen() {
-  const [entries] = useState<JournalEntryMock[]>(PAST_ENTRIES_MOCK);
+  const [entries, setEntries] = useState<JournalEntryResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [onlyFavorites, setOnlyFavorites] = useState(false);
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
 
-  const filteredEntries = onlyFavorites
-    ? entries.filter((e) => e.isFavorite)
-    : entries;
+  const loadEntries = async () => {
+    try {
+      const res = await api.getEntries({
+        isFavorite: onlyFavorites ? true : undefined,
+        limit: 50,
+      });
+      setEntries(res.data);
+    } catch {
+      // Offline fallback: use mock data
+      const fallback = PAST_ENTRIES_MOCK.map((m) => ({
+        id: m.id,
+        userId: "00000000-0000-0000-0000-000000000001",
+        entryDate: m.entryDate,
+        title: m.title,
+        body: m.body,
+        mood: m.mood,
+        energy: m.energy,
+        status: "published" as const,
+        isFavorite: m.isFavorite,
+        revision: 1,
+        sections: m.sections.map((s, i) => ({
+          id: s.id,
+          sectionType: s.sectionType as any,
+          content: s.content,
+          sortOrder: i,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })),
+        tags: m.tags,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }));
+      setEntries(onlyFavorites ? fallback.filter((e) => e.isFavorite) : fallback);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    setLoading(true);
+    loadEntries();
+  }, [onlyFavorites]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadEntries();
+  };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.contentContainer}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
       {/* Top Filter Bar */}
       <View style={styles.filterRow}>
         <Text style={styles.countText}>
-          {filteredEntries.length} {filteredEntries.length === 1 ? "Memory" : "Memories"}
+          {entries.length} {entries.length === 1 ? "Memory" : "Memories"}
         </Text>
         <Pressable
           style={[styles.favoriteFilterPill, onlyFavorites && styles.favoriteFilterPillActive]}
           onPress={() => setOnlyFavorites((p) => !p)}
         >
           <Text style={[styles.favoriteFilterText, onlyFavorites && styles.favoriteFilterTextActive]}>
-            ⭐ Favorites Only
+            ★ Favorites Only
           </Text>
         </Pressable>
       </View>
 
-      {/* Entries List */}
-      {filteredEntries.length === 0 ? (
+      {loading ? (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#6366f1" />
+          <Text style={styles.loadingText}>Loading timeline...</Text>
+        </View>
+      ) : entries.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyIcon}>📖</Text>
           <Text style={styles.emptyTitle}>No memories found</Text>
-          <Text style={styles.emptySubtitle}>Try toggling the favorites filter off.</Text>
+          <Text style={styles.emptySubtitle}>
+            {onlyFavorites
+              ? "Try toggling the favorites filter off."
+              : "Write your first entry in the Today tab!"}
+          </Text>
         </View>
       ) : (
-        filteredEntries.map((item) => {
+        entries.map((item) => {
           const moodOpt = MOOD_OPTIONS.find((m) => m.level === item.mood);
           const isExpanded = selectedEntryId === item.id;
 
           return (
             <Pressable
               key={item.id}
-              style={[styles.card, isExpanded && styles.cardExpanded]}
+              style={styles.card}
               onPress={() => setSelectedEntryId(isExpanded ? null : item.id)}
             >
-              {/* Card Header */}
               <View style={styles.cardHeader}>
-                <View style={styles.dateBadge}>
-                  <Text style={styles.dateText}>{item.entryDate}</Text>
+                <View>
+                  <Text style={styles.dateLabel}>{item.entryDate}</Text>
+                  {item.title ? <Text style={styles.titleText}>{item.title}</Text> : null}
                 </View>
-                <View style={styles.headerRight}>
+                <View style={styles.badgeRow}>
+                  {item.isFavorite && <Text style={styles.starBadge}>★</Text>}
                   {moodOpt && (
-                    <View style={styles.moodPill}>
+                    <View style={styles.moodBadge}>
                       <Text style={styles.moodEmoji}>{moodOpt.emoji}</Text>
-                      <Text style={styles.moodLabel}>{moodOpt.label}</Text>
                     </View>
                   )}
-                  {item.isFavorite && <Text style={styles.favoriteBadge}>⭐</Text>}
                 </View>
               </View>
 
-              {/* Title & Body */}
-              <Text style={styles.cardTitle}>{item.title}</Text>
-              <Text
-                style={styles.cardBody}
-                numberOfLines={isExpanded ? undefined : 3}
-              >
+              <Text style={styles.snippetText} numberOfLines={isExpanded ? undefined : 3}>
                 {item.body}
               </Text>
 
-              {/* Expanded Reflection Details */}
+              {/* Reflection Sections (shown when expanded) */}
               {isExpanded && item.sections.length > 0 && (
-                <View style={styles.expandedSectionsWrap}>
+                <View style={styles.expandedSections}>
                   {item.sections.map((sec) => (
-                    <View key={sec.id} style={styles.reflectionItem}>
-                      <Text style={styles.reflectionLabel}>
-                        {sec.sectionType === "highlights" && "🌟 Highlight"}
-                        {sec.sectionType === "gratitude" && "🙏 Gratitude"}
-                        {sec.sectionType === "learned" && "💡 Lesson"}
-                        {sec.sectionType === "tomorrow" && "🎯 Tomorrow"}
+                    <View key={sec.id} style={styles.sectionRow}>
+                      <Text style={styles.sectionHeading}>
+                        {sec.sectionType === "highlights"
+                          ? "🌟 Highlights"
+                          : sec.sectionType === "gratitude"
+                          ? "🙏 Gratitude"
+                          : sec.sectionType === "learned"
+                          ? "💡 Learned"
+                          : sec.sectionType === "tomorrow"
+                          ? "🎯 Tomorrow"
+                          : "Notes"}
                       </Text>
-                      <Text style={styles.reflectionText}>{sec.content}</Text>
+                      <Text style={styles.sectionContent}>{sec.content}</Text>
                     </View>
                   ))}
                 </View>
               )}
 
-              {/* Card Footer: Tags & Expand Hint */}
-              <View style={styles.cardFooter}>
-                <View style={styles.tagChipsList}>
-                  {item.tags.map((tag) => (
-                    <View key={tag} style={styles.tagChip}>
-                      <Text style={styles.tagChipText}>#{tag}</Text>
-                    </View>
+              {/* Tags */}
+              {item.tags.length > 0 && (
+                <View style={styles.tagsRow}>
+                  {item.tags.map((t) => (
+                    <Text key={t} style={styles.tagText}>
+                      #{t}
+                    </Text>
                   ))}
                 </View>
-                <Text style={styles.expandHint}>
-                  {isExpanded ? "Show less ▲" : "Details ▼"}
-                </Text>
-              </View>
+              )}
             </Pressable>
           );
         })
@@ -119,14 +179,23 @@ export default function TimelineScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#f9fafb",
   },
   contentContainer: {
     padding: 16,
     paddingBottom: 40,
-    maxWidth: 680,
+    maxWidth: 720,
     width: "100%",
     alignSelf: "center",
+  },
+  centerContainer: {
+    paddingVertical: 50,
+    alignItems: "center",
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: "#6b7280",
   },
   filterRow: {
     flexDirection: "row",
@@ -135,174 +204,132 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   countText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#64748b",
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#374151",
   },
   favoriteFilterPill: {
-    paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    backgroundColor: "#e5e7eb",
   },
   favoriteFilterPillActive: {
-    backgroundColor: "#fef9c3",
-    borderColor: "#facc15",
+    backgroundColor: "#fef3c7",
+    borderWidth: 1,
+    borderColor: "#f59e0b",
   },
   favoriteFilterText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#475569",
+    color: "#4b5563",
   },
   favoriteFilterTextActive: {
-    color: "#a16207",
+    color: "#b45309",
   },
   card: {
     backgroundColor: "#ffffff",
     borderRadius: 14,
     padding: 16,
-    marginBottom: 14,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
-    shadowColor: "#000000",
+    borderColor: "#e5e7eb",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
-    shadowRadius: 4,
+    shadowRadius: 2,
     elevation: 1,
-  },
-  cardExpanded: {
-    borderColor: "#0284c7",
   },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 10,
+    alignItems: "flex-start",
+    marginBottom: 8,
   },
-  dateBadge: {
-    backgroundColor: "#f1f5f9",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  dateText: {
+  dateLabel: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#334155",
-  },
-  headerRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  moodPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f8fafc",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    gap: 4,
-  },
-  moodEmoji: {
-    fontSize: 13,
-  },
-  moodLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#475569",
-  },
-  favoriteBadge: {
-    fontSize: 14,
-  },
-  cardTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#0f172a",
-    marginBottom: 6,
-  },
-  cardBody: {
-    fontSize: 14,
-    lineHeight: 22,
-    color: "#334155",
-    marginBottom: 12,
-  },
-  expandedSectionsWrap: {
-    marginTop: 8,
-    marginBottom: 14,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#f1f5f9",
-    gap: 8,
-  },
-  reflectionItem: {
-    backgroundColor: "#f8fafc",
-    borderRadius: 8,
-    padding: 10,
-  },
-  reflectionLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#0284c7",
-    marginBottom: 2,
+    color: "#6b7280",
     textTransform: "uppercase",
   },
-  reflectionText: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: "#1e293b",
+  titleText: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#111827",
+    marginTop: 2,
   },
-  cardFooter: {
+  badgeRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: "#f8fafc",
+    gap: 6,
   },
-  tagChipsList: {
+  starBadge: {
+    fontSize: 16,
+    color: "#f59e0b",
+  },
+  moodBadge: {
+    backgroundColor: "#f3f4f6",
+    borderRadius: 12,
+    padding: 4,
+  },
+  moodEmoji: {
+    fontSize: 16,
+  },
+  snippetText: {
+    fontSize: 14,
+    color: "#374151",
+    lineHeight: 20,
+  },
+  expandedSections: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#f3f4f6",
+    gap: 8,
+  },
+  sectionRow: {
+    backgroundColor: "#f9fafb",
+    padding: 8,
+    borderRadius: 8,
+  },
+  sectionHeading: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#4f46e5",
+    marginBottom: 2,
+  },
+  sectionContent: {
+    fontSize: 13,
+    color: "#1f2937",
+    lineHeight: 18,
+  },
+  tagsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 6,
-    flex: 1,
+    marginTop: 10,
   },
-  tagChip: {
-    backgroundColor: "#f1f5f9",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  tagChipText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#475569",
-  },
-  expandHint: {
+  tagText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#0284c7",
-    marginLeft: 8,
+    color: "#6366f1",
   },
   emptyContainer: {
-    alignItems: "center",
     paddingVertical: 60,
+    alignItems: "center",
   },
   emptyIcon: {
-    fontSize: 40,
+    fontSize: 48,
     marginBottom: 12,
   },
   emptyTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "700",
-    color: "#0f172a",
+    color: "#111827",
     marginBottom: 4,
   },
   emptySubtitle: {
-    fontSize: 13,
-    color: "#64748b",
+    fontSize: 14,
+    color: "#6b7280",
   },
 });

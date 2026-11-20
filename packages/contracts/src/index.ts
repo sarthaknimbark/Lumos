@@ -107,13 +107,17 @@ export type JournalEntryResponse = z.infer<typeof JournalEntryResponseSchema>;
 export const ListEntriesQuerySchema = z.object({
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   q: z.string().optional(),
   tag: z.string().optional(),
   mood: z.coerce.number().min(1).max(5).optional(),
+  energy: z.coerce.number().min(1).max(5).optional(),
+  isFavorite: z.coerce.boolean().optional(),
   cursor: z.string().optional(),
-  limit: z.coerce.number().min(1).max(100).default(20),
+  offset: z.coerce.number().min(0).optional().default(0),
+  limit: z.coerce.number().min(1).max(100).optional().default(20),
 });
-export type ListEntriesQuery = z.infer<typeof ListEntriesQuerySchema>;
+export type ListEntriesQuery = z.input<typeof ListEntriesQuerySchema>;
 
 /**
  * 4. Tags DTOs
