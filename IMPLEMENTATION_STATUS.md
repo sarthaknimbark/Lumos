@@ -1,6 +1,6 @@
 # Implementation Status
 
-Current status: Phase 7 complete. Ready for Phase 8 (Google Calendar read-only integration).
+Current status: Phase 8 complete. Ready for Phase 9 (Export/import, security, testing).
 
 ## Phases
 - [x] 0 — Monorepo and tooling
@@ -11,7 +11,7 @@ Current status: Phase 7 complete. Ready for Phase 8 (Google Calendar read-only i
 - [x] 5 — Journal, calendar, search, mood, tags (Drizzle persistence + universal client integration)
 - [x] 6 — Native/web offline drafts and sync (IndexedDB on web, SecureStore on native, queue & conflict UI)
 - [x] 7 — Google Drive backup and attachments
-- [ ] 8 — Google Calendar read-only integration
+- [x] 8 — Google Calendar read-only integration
 - [ ] 9 — Export/import, security, testing
 - [ ] 10 — Cloud deployment and Android release preparation
 

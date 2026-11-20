@@ -20,6 +20,7 @@ import { THEME } from "../../src/theme";
 import { MoodSelector } from "../../src/components/MoodSelector";
 import { EnergySelector } from "../../src/components/EnergySelector";
 import { TagPill } from "../../src/components/TagPill";
+import { CalendarEventItem } from "@myday/contracts";
 
 function getTodayString() {
   const now = new Date();
@@ -76,6 +77,9 @@ export default function TodayScreen() {
   // AI Prompt State
   const [aiPrompt, setAiPrompt] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+
+  // Google Calendar Read-Only Context (Phase 8)
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEventItem[]>([]);
 
   // Offline Sync State
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
@@ -184,6 +188,16 @@ export default function TodayScreen() {
     }
 
     loadData();
+
+    // Fetch read-only Google Calendar context for currentDate
+    api.getCalendarEvents(currentDate)
+      .then((ev) => {
+        if (!cancelled) setCalendarEvents(ev);
+      })
+      .catch(() => {
+        if (!cancelled) setCalendarEvents([]);
+      });
+
     return () => {
       cancelled = true;
     };
@@ -515,6 +529,32 @@ export default function TodayScreen() {
               </View>
               {aiPrompt && <Text style={styles.aiSparkContent}>{aiPrompt}</Text>}
             </View>
+
+            {/* Google Calendar Read-Only Day Schedule Context (Phase 8) */}
+            {calendarEvents.length > 0 && (
+              <View style={styles.calContextCard}>
+                <View style={styles.calContextHeader}>
+                  <Ionicons name="calendar-outline" size={15} color={THEME.colors.sky} />
+                  <Text style={styles.calContextTitle}>Day Schedule Context ({calendarEvents.length} events)</Text>
+                </View>
+                <View style={styles.calEventsList}>
+                  {calendarEvents.map((ev) => {
+                    const startFmt = ev.startTime.length >= 16 ? ev.startTime.slice(11, 16) : ev.startTime;
+                    const endFmt = ev.endTime.length >= 16 ? ev.endTime.slice(11, 16) : ev.endTime;
+                    return (
+                      <View key={ev.id} style={styles.calEventRow}>
+                        <View style={styles.calEventTimeBadge}>
+                          <Text style={styles.calEventTimeText}>{startFmt} - {endFmt}</Text>
+                        </View>
+                        <Text style={styles.calEventTitle} numberOfLines={1}>
+                          {ev.title}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
 
             {/* Headline Input Card */}
             <View style={styles.card}>
@@ -962,6 +1002,50 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     fontStyle: "italic",
+  },
+  calContextCard: {
+    backgroundColor: THEME.colors.surface,
+    borderRadius: THEME.radius.lg,
+    padding: 14,
+    marginBottom: THEME.spacing.md,
+    borderWidth: 1,
+    borderColor: "rgba(14, 165, 233, 0.25)",
+  },
+  calContextHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginBottom: 8,
+  },
+  calContextTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: THEME.colors.sky,
+    letterSpacing: -0.2,
+  },
+  calEventsList: {
+    gap: 6,
+  },
+  calEventRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  calEventTimeBadge: {
+    backgroundColor: THEME.colors.skyMuted,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: THEME.radius.sm,
+  },
+  calEventTimeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: THEME.colors.sky,
+  },
+  calEventTitle: {
+    fontSize: 13,
+    color: THEME.colors.textSecondary,
+    flex: 1,
   },
   card: {
     backgroundColor: THEME.colors.surface,

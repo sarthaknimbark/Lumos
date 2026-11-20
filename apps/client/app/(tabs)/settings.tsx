@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -16,7 +17,13 @@ import { api } from "../../src/api/client";
 import { MOCK_USER_SETTINGS, PAST_ENTRIES_MOCK } from "../../src/mockData";
 import { UserSettingsMock } from "../../src/types";
 import { THEME } from "../../src/theme";
-import { DriveBackupItem, DriveStatusResponse, RestorePreviewResponse } from "@myday/contracts";
+import {
+  CalendarStatusResponse,
+  DriveBackupItem,
+  DriveStatusResponse,
+  ImportPreviewResponse,
+  RestorePreviewResponse,
+} from "@myday/contracts";
 
 export default function SettingsScreen() {
   const [settings, setSettings] = useState<UserSettingsMock>(MOCK_USER_SETTINGS);
@@ -36,6 +43,22 @@ export default function SettingsScreen() {
   const [restoreModalVisible, setRestoreModalVisible] = useState(false);
   const [previewData, setPreviewData] = useState<RestorePreviewResponse | null>(null);
 
+  // Google Calendar State (Phase 8)
+  const [calendarStatus, setCalendarStatus] = useState<CalendarStatusResponse>({
+    connected: false,
+    providerAccountId: null,
+    scopes: [],
+    lastSyncAt: null,
+  });
+  const [calendarLoading, setCalendarLoading] = useState(false);
+
+  // Export / Import / Deletion State (Phase 9)
+  const [exportLoading, setExportLoading] = useState(false);
+  const [importModalVisible, setImportModalVisible] = useState(false);
+  const [importJsonInput, setImportJsonInput] = useState("");
+  const [importPreview, setImportPreview] = useState<ImportPreviewResponse | null>(null);
+  const [importLoading, setImportLoading] = useState(false);
+
   const loadDriveData = async () => {
     try {
       const status = await api.getDriveStatus();
@@ -46,6 +69,46 @@ export default function SettingsScreen() {
       }
     } catch {
       // Offline fallback
+    }
+
+    try {
+      const calStatus = await api.getCalendarStatus();
+      setCalendarStatus(calStatus);
+    } catch {
+      // Offline fallback
+    }
+  };
+
+  const handleConnectCalendar = async () => {
+    setCalendarLoading(true);
+    try {
+      const updated = await api.connectCalendar("auth_code_calendar_readonly_scope");
+      setCalendarStatus(updated);
+      setExportNotice("Google Calendar connected (read-only context enabled).");
+      setTimeout(() => setExportNotice(null), 3000);
+    } catch (err: any) {
+      Alert.alert("Connection Error", err?.message || "Failed to connect Google Calendar");
+    } finally {
+      setCalendarLoading(false);
+    }
+  };
+
+  const handleDisconnectCalendar = async () => {
+    setCalendarLoading(true);
+    try {
+      await api.disconnectCalendar();
+      setCalendarStatus({
+        connected: false,
+        providerAccountId: null,
+        scopes: [],
+        lastSyncAt: null,
+      });
+      setExportNotice("Google Calendar disconnected.");
+      setTimeout(() => setExportNotice(null), 3000);
+    } catch {
+      // Ignore
+    } finally {
+      setCalendarLoading(false);
     }
   };
 
@@ -139,15 +202,153 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleExportJSON = () => {
-    const dataStr = JSON.stringify(PAST_ENTRIES_MOCK, null, 2);
-    setExportNotice(`Exported ${PAST_ENTRIES_MOCK.length} entries as JSON (${dataStr.length} bytes).`);
-    setTimeout(() => setExportNotice(null), 3000);
+  const triggerWebDownload = (content: string, filename: string, mime: string) => {
+    if (Platform.OS === "web" && typeof document !== "undefined") {
+      const blob = new Blob([content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
   };
 
-  const handleExportMarkdown = () => {
-    setExportNotice(`Exported ${PAST_ENTRIES_MOCK.length} entries as Markdown bundle.`);
-    setTimeout(() => setExportNotice(null), 3000);
+  const handleExportJSON = async () => {
+    setExportLoading(true);
+    try {
+      const data = await api.exportData("json");
+      const content = JSON.stringify(data, null, 2);
+      const total = typeof data === "object" && data !== null && "totalEntries" in data ? (data as any).totalEntries : 0;
+      const filename = `myday-journal-export-${new Date().toISOString().slice(0, 10)}.json`;
+      triggerWebDownload(content, filename, "application/json");
+
+      setExportNotice(`Exported ${total} entries to ${filename}.`);
+      setTimeout(() => setExportNotice(null), 4000);
+    } catch (err: any) {
+      Alert.alert("Export Failed", err?.message || "Could not export JSON data");
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const handleExportMarkdown = async () => {
+    setExportLoading(true);
+    try {
+      const markdown = (await api.exportData("markdown")) as string;
+      const filename = `myday-journal-export-${new Date().toISOString().slice(0, 10)}.md`;
+      triggerWebDownload(markdown, filename, "text/markdown");
+
+      setExportNotice(`Exported journal archive to ${filename}.`);
+      setTimeout(() => setExportNotice(null), 4000);
+    } catch (err: any) {
+      Alert.alert("Export Failed", err?.message || "Could not export Markdown data");
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const handleOpenImportModal = () => {
+    setImportPreview(null);
+    setImportJsonInput("");
+    setImportModalVisible(true);
+  };
+
+  const handlePreviewImport = async () => {
+    if (!importJsonInput.trim()) {
+      Alert.alert("Empty Input", "Please paste valid MyDay JSON backup content.");
+      return;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(importJsonInput);
+    } catch {
+      Alert.alert("JSON Syntax Error", "The pasted text is not valid JSON.");
+      return;
+    }
+
+    setImportLoading(true);
+    try {
+      const preview = await api.previewImport(parsed);
+      setImportPreview(preview);
+      if (!preview.valid) {
+        Alert.alert(
+          "Invalid Import Schema",
+          preview.validationErrors?.join("\n") || "Payload does not match MyDay export format."
+        );
+      }
+    } catch (err: any) {
+      Alert.alert("Import Preview Error", err?.message || "Could not preview import");
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  const handleConfirmImport = async (strategy: "merge" | "overwrite") => {
+    if (!importJsonInput) return;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(importJsonInput);
+    } catch {
+      return;
+    }
+
+    setImportLoading(true);
+    try {
+      const result = await api.confirmImport(strategy, parsed);
+      setImportModalVisible(false);
+      setImportPreview(null);
+      setImportJsonInput("");
+      setExportNotice(
+        `Imported: ${result.importedCount} new, ${result.overwrittenCount} overwritten, ${result.skippedCount} skipped.`
+      );
+      setTimeout(() => setExportNotice(null), 4000);
+    } catch (err: any) {
+      Alert.alert("Import Failed", err?.message || "Could not import entries");
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  const handleDeleteAccountData = () => {
+    const confirmAction = async () => {
+      setExportLoading(true);
+      try {
+        const result = await api.deleteAccountData();
+        setExportNotice(
+          `All account data purged: ${result.deletedEntriesCount} entries, ${result.deletedAttachmentsCount} attachments removed.`
+        );
+        setTimeout(() => setExportNotice(null), 4000);
+        // Refresh drive and calendar states
+        loadDriveData();
+      } catch (err: any) {
+        Alert.alert("Deletion Failed", err?.message || "Could not delete account data");
+      } finally {
+        setExportLoading(false);
+      }
+    };
+
+    if (Platform.OS === "web") {
+      if (
+        window.confirm(
+          "Are you absolutely sure? This will permanently delete ALL diary entries, reflections, and attachments. This cannot be undone."
+        )
+      ) {
+        confirmAction();
+      }
+    } else {
+      Alert.alert(
+        "Delete All Data",
+        "This will permanently delete ALL your journal entries, reflections, and attachments. This action is irreversible.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Permanently Delete", style: "destructive", onPress: confirmAction },
+        ]
+      );
+    }
   };
 
   const showCalendarNotice = () => {
@@ -336,21 +537,41 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      {/* Google Calendar (Phase 8 Preview) */}
-      <Text style={styles.sectionHeading}>GOOGLE CALENDAR (PHASE 8)</Text>
+      {/* Google Calendar (Phase 8) */}
+      <Text style={styles.sectionHeading}>GOOGLE CALENDAR (READ-ONLY CONTEXT)</Text>
       <View style={styles.card}>
         <View style={styles.integrationRow}>
           <View style={styles.integrationIcon}>
             <Ionicons name="calendar-outline" size={20} color={THEME.colors.accent} />
           </View>
           <View style={styles.integrationInfo}>
-            <Text style={styles.integrationName}>Google Calendar (Read-Only)</Text>
+            <Text style={styles.integrationName}>Daily Schedule Context</Text>
             <Text style={styles.integrationStatus}>
-              Disconnected (Optional context in Phase 8)
+              {calendarStatus.connected
+                ? `Connected (${calendarStatus.providerAccountId || "Google Account"})`
+                : "Disconnected — optional read-only context for Today tab"}
             </Text>
           </View>
-          <Pressable style={styles.connectButton} onPress={showCalendarNotice}>
-            <Text style={styles.connectButtonText}>Details</Text>
+          <Pressable
+            style={[
+              styles.connectButton,
+              calendarStatus.connected && styles.connectButtonDisconnect,
+            ]}
+            onPress={calendarStatus.connected ? handleDisconnectCalendar : handleConnectCalendar}
+            disabled={calendarLoading}
+          >
+            {calendarLoading ? (
+              <ActivityIndicator size="small" color={THEME.colors.textPrimary} />
+            ) : (
+              <Text
+                style={[
+                  styles.connectButtonText,
+                  calendarStatus.connected && styles.connectButtonTextDisconnect,
+                ]}
+              >
+                {calendarStatus.connected ? "Disconnect" : "Connect"}
+              </Text>
+            )}
           </Pressable>
         </View>
       </View>

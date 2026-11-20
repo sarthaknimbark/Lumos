@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyPluginOptions } from "fastify";
 import {
+  CalendarConnectInputSchema,
   CreateAttachmentInputSchema,
   DriveConnectInputSchema,
   RestoreConfirmRequestSchema,
@@ -7,6 +8,7 @@ import {
 } from "@myday/contracts";
 import { Env } from "../config.js";
 import { createAuthGuard } from "../middleware/auth.js";
+import { calendarService } from "../services/calendarService.js";
 import { driveService } from "../services/driveService.js";
 
 interface RouteOptions extends FastifyPluginOptions {
@@ -176,6 +178,98 @@ export async function integrationsRoutes(
       const userId = request.userId!;
       await driveService.disconnect(userId, options.env);
       return { success: true, message: "Google Drive disconnected" };
+    }
+  );
+
+  // --------------------------------------------------------------------------
+  // 2. Google Calendar Read-Only Integration (Phase 8)
+  // --------------------------------------------------------------------------
+
+  // GET /api/v1/integrations/calendar/status
+  app.get(
+    "/api/v1/integrations/calendar/status",
+    {
+      preHandler: [authGuard],
+      schema: {
+        description: "Get Google Calendar connection status",
+        tags: ["Integrations"],
+      },
+    },
+    async (request) => {
+      const userId = request.userId!;
+      return calendarService.getStatus(userId, options.env);
+    }
+  );
+
+  // POST /api/v1/integrations/calendar/connect
+  app.post(
+    "/api/v1/integrations/calendar/connect",
+    {
+      preHandler: [authGuard],
+      schema: {
+        description: "Connect Google Calendar with user-authorized read-only OAuth code",
+        tags: ["Integrations"],
+      },
+    },
+    async (request, reply) => {
+      const userId = request.userId!;
+      const parsed = CalendarConnectInputSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Invalid calendar connect payload",
+            details: parsed.error.format(),
+            requestId: request.id,
+          },
+        });
+      }
+
+      return calendarService.connect(userId, parsed.data, options.env);
+    }
+  );
+
+  // GET /api/v1/integrations/calendar/events?date=YYYY-MM-DD
+  app.get<{ Querystring: { date?: string } }>(
+    "/api/v1/integrations/calendar/events",
+    {
+      preHandler: [authGuard],
+      schema: {
+        description: "Get read-only calendar events for diary date context",
+        tags: ["Integrations"],
+      },
+    },
+    async (request, reply) => {
+      const userId = request.userId!;
+      const date = request.query.date || new Date().toISOString().slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return reply.status(400).send({
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Query parameter 'date' must be in YYYY-MM-DD format",
+            requestId: request.id,
+          },
+        });
+      }
+
+      return calendarService.getEventsForDate(userId, date, options.env);
+    }
+  );
+
+  // POST /api/v1/integrations/calendar/disconnect
+  app.post(
+    "/api/v1/integrations/calendar/disconnect",
+    {
+      preHandler: [authGuard],
+      schema: {
+        description: "Disconnect Google Calendar and clear tokens",
+        tags: ["Integrations"],
+      },
+    },
+    async (request) => {
+      const userId = request.userId!;
+      await calendarService.disconnect(userId, options.env);
+      return { success: true, message: "Google Calendar disconnected" };
     }
   );
 

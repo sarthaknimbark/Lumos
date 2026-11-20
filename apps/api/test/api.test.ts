@@ -513,6 +513,74 @@ async function runTests() {
     if (delRes.statusCode !== 200) throw new Error(`Expected 200, got ${delRes.statusCode}`);
   });
 
+  // 19. Phase 8: Google Calendar Read-Only Integration
+  await test("Google Calendar: Status, Connect (read-only), Events for date, Disconnect, and Isolation", async () => {
+    // 19.1 Initial status is disconnected
+    const statusRes = await app.inject({
+      method: "GET",
+      url: "/api/v1/integrations/calendar/status",
+    });
+    if (statusRes.statusCode !== 200) throw new Error(`Expected 200, got ${statusRes.statusCode}`);
+    if (statusRes.json().connected !== false) throw new Error("Expected disconnected initially");
+
+    // 19.2 Connect Calendar with read-only code
+    const connectRes = await app.inject({
+      method: "POST",
+      url: "/api/v1/integrations/calendar/connect",
+      payload: { authCode: "4/0AeanS0_example_calendar_auth_code" },
+    });
+    if (connectRes.statusCode !== 200) throw new Error(`Expected 200, got ${connectRes.statusCode}`);
+    const connectBody = connectRes.json();
+    if (connectBody.connected !== true) throw new Error("Expected connected: true");
+    if (!connectBody.scopes.includes("https://www.googleapis.com/auth/calendar.events.readonly")) {
+      throw new Error("Must enforce read-only calendar scope");
+    }
+
+    // 19.3 Fetch read-only events for a diary date
+    const eventsRes = await app.inject({
+      method: "GET",
+      url: "/api/v1/integrations/calendar/events?date=2026-11-20",
+    });
+    if (eventsRes.statusCode !== 200) throw new Error(`Expected 200, got ${eventsRes.statusCode}`);
+    const eventsBody = eventsRes.json();
+    if (eventsBody.date !== "2026-11-20" || !Array.isArray(eventsBody.events)) {
+      throw new Error(`Invalid events response: ${JSON.stringify(eventsBody)}`);
+    }
+
+    // 19.4 Rejects invalid date format
+    const invalidDateRes = await app.inject({
+      method: "GET",
+      url: "/api/v1/integrations/calendar/events?date=invalid-date",
+    });
+    if (invalidDateRes.statusCode !== 400) {
+      throw new Error(`Expected 400 for invalid date, got ${invalidDateRes.statusCode}`);
+    }
+
+    // 19.5 Cross-user isolation: User B should be disconnected
+    const userBStatus = await app.inject({
+      method: "GET",
+      url: "/api/v1/integrations/calendar/status",
+      headers: { "x-test-user-id": "22222222-2222-2222-2222-222222222222" },
+    });
+    if (userBStatus.statusCode !== 200) throw new Error(`Expected 200, got ${userBStatus.statusCode}`);
+    if (userBStatus.json().connected !== false) {
+      throw new Error("User B's calendar status must be isolated from User A");
+    }
+
+    // 19.6 Disconnect Calendar for User A
+    const disconnectRes = await app.inject({
+      method: "POST",
+      url: "/api/v1/integrations/calendar/disconnect",
+    });
+    if (disconnectRes.statusCode !== 200) throw new Error(`Expected 200, got ${disconnectRes.statusCode}`);
+
+    const finalStatus = await app.inject({
+      method: "GET",
+      url: "/api/v1/integrations/calendar/status",
+    });
+    if (finalStatus.json().connected !== false) throw new Error("Expected disconnected after disconnect call");
+  });
+
   await app.close();
 
   console.log(`\nResults: ${passed} passed, ${failed} failed.\n`);

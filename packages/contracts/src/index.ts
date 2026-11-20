@@ -270,3 +270,129 @@ export const AttachmentResponseSchema = z.object({
 });
 export type AttachmentResponse = z.infer<typeof AttachmentResponseSchema>;
 
+/**
+ * 8. Google Calendar Read-Only Integration DTOs (Phase 8)
+ */
+export const CalendarStatusResponseSchema = z.object({
+  connected: z.boolean(),
+  providerAccountId: z.string().nullable().optional(),
+  scopes: z.array(z.string()).optional(),
+  lastSyncAt: z.string().nullable().optional(),
+});
+export type CalendarStatusResponse = z.infer<typeof CalendarStatusResponseSchema>;
+
+export const CalendarConnectInputSchema = z.object({
+  authCode: z.string().min(1, "Authorization code is required"),
+  redirectUri: z.string().url().optional(),
+});
+export type CalendarConnectInput = z.infer<typeof CalendarConnectInputSchema>;
+
+export const CalendarEventItemSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  startTime: z.string(),
+  endTime: z.string(),
+  isAllDay: z.boolean().default(false),
+  location: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+});
+export type CalendarEventItem = z.infer<typeof CalendarEventItemSchema>;
+
+export const CalendarEventsResponseSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  events: z.array(CalendarEventItemSchema),
+});
+export type CalendarEventsResponse = z.infer<typeof CalendarEventsResponseSchema>;
+
+/**
+ * 9. Export, Import & Account Data Deletion DTOs (Phase 9)
+ */
+export const ExportFormatSchema = z.enum(["json", "markdown"]);
+export type ExportFormat = z.infer<typeof ExportFormatSchema>;
+
+export const ExportQuerySchema = z.object({
+  format: ExportFormatSchema.default("json"),
+});
+export type ExportQuery = z.infer<typeof ExportQuerySchema>;
+
+export const ExportedEntrySchema = z.object({
+  id: z.string(),
+  entryDate: z.string(),
+  title: z.string().nullable().optional(),
+  body: z.string(),
+  mood: z.number().int().min(1).max(5).nullable().optional(),
+  energy: z.number().int().min(1).max(5).nullable().optional(),
+  status: z.enum(["draft", "published"]).default("published"),
+  isFavorite: z.boolean().default(false),
+  revision: z.number().int().default(1),
+  tags: z.array(z.string()).default([]),
+  sections: z.array(
+    z.object({
+      sectionType: SectionTypeSchema,
+      content: z.string(),
+      sortOrder: z.number().int().default(0),
+    })
+  ).default([]),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type ExportedEntry = z.infer<typeof ExportedEntrySchema>;
+
+export const JournalExportPayloadSchema = z.object({
+  version: z.string().default("1.0.0"),
+  exportedAt: z.string(),
+  userId: z.string(),
+  totalEntries: z.number().int(),
+  entries: z.array(ExportedEntrySchema),
+});
+export type JournalExportPayload = z.infer<typeof JournalExportPayloadSchema>;
+
+export const ImportPreviewInputSchema = z.object({
+  data: z.unknown(),
+});
+export type ImportPreviewInput = z.infer<typeof ImportPreviewInputSchema>;
+
+export const ImportPreviewResponseSchema = z.object({
+  valid: z.boolean(),
+  version: z.string(),
+  totalEntries: z.number().int(),
+  newEntriesCount: z.number().int(),
+  conflictingDatesCount: z.number().int(),
+  conflictingDates: z.array(z.string()),
+  previewEntries: z.array(
+    z.object({
+      entryDate: z.string(),
+      title: z.string().nullable().optional(),
+      willOverwrite: z.boolean(),
+    })
+  ),
+  validationErrors: z.array(z.string()).optional(),
+});
+export type ImportPreviewResponse = z.infer<typeof ImportPreviewResponseSchema>;
+
+export const ImportConfirmInputSchema = z.object({
+  strategy: z.enum(["merge", "overwrite"]).default("merge"),
+  data: z.unknown(),
+});
+export type ImportConfirmInput = z.infer<typeof ImportConfirmInputSchema>;
+
+export const ImportConfirmResponseSchema = z.object({
+  success: z.boolean(),
+  importedCount: z.number().int(),
+  skippedCount: z.number().int(),
+  overwrittenCount: z.number().int(),
+  timestamp: z.string(),
+});
+export type ImportConfirmResponse = z.infer<typeof ImportConfirmResponseSchema>;
+
+export const AccountDataDeletionResponseSchema = z.object({
+  success: z.boolean(),
+  deletedEntriesCount: z.number().int(),
+  deletedAttachmentsCount: z.number().int(),
+  deletedTagsCount: z.number().int(),
+  timestamp: z.string(),
+});
+export type AccountDataDeletionResponse = z.infer<typeof AccountDataDeletionResponseSchema>;
+
+
+

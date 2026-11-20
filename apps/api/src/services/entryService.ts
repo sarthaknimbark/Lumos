@@ -13,6 +13,7 @@
 
 import {
   CreateEntryInput,
+  ExportedEntry,
   JournalEntryResponse,
   ListEntriesQuery,
   UpdateEntryInput,
@@ -660,5 +661,95 @@ export const entryService = {
     if (!entry || entry.userId !== userId) return false;
     inMemoryEntries.delete(id);
     return true;
+  },
+
+  /**
+   * Get all entries for user (for export)
+   */
+  async getAllForUser(userId: string): Promise<JournalEntryResponse[]> {
+    const listRes = await this.list(userId, { limit: 10000, offset: 0 });
+    return listRes.items.sort((a, b) => a.entryDate.localeCompare(b.entryDate));
+  },
+
+  /**
+   * Upsert imported entry (merge vs overwrite)
+   */
+  async upsertImported(
+    userId: string,
+    entry: ExportedEntry,
+    strategy: "merge" | "overwrite"
+  ): Promise<"imported" | "overwritten" | "skipped"> {
+    const existing = await this.getByDate(userId, entry.entryDate);
+
+    if (existing) {
+      if (strategy === "merge") {
+        return "skipped";
+      }
+      // Overwrite existing
+      await this.update(userId, existing.id, {
+        title: entry.title ?? undefined,
+        body: entry.body,
+        mood: entry.mood ?? undefined,
+        energy: entry.energy ?? undefined,
+        status: entry.status,
+        isFavorite: entry.isFavorite,
+        baseRevision: existing.revision,
+        tags: entry.tags,
+        sections: entry.sections.map((s) => ({
+          sectionType: s.sectionType,
+          content: s.content,
+          sortOrder: s.sortOrder,
+        })),
+      });
+      return "overwritten";
+    }
+
+    // New entry
+    await this.create(userId, {
+      entryDate: entry.entryDate,
+      title: entry.title ?? undefined,
+      body: entry.body,
+      mood: entry.mood ?? undefined,
+      energy: entry.energy ?? undefined,
+      status: entry.status,
+      isFavorite: entry.isFavorite,
+      tags: entry.tags,
+      sections: entry.sections.map((s) => ({
+        sectionType: s.sectionType,
+        content: s.content,
+        sortOrder: s.sortOrder,
+      })),
+    });
+    return "imported";
+  },
+
+  /**
+   * Delete all data for user (account data deletion workflow)
+   */
+  async deleteAllForUser(userId: string): Promise<number> {
+    const db = getDbClient();
+    if (db) {
+      try {
+        const deleted = await db
+          .delete(journalEntries)
+          .where(eq(journalEntries.userId, userId))
+          .returning();
+        for (const [id, entry] of inMemoryEntries.entries()) {
+          if (entry.userId === userId) inMemoryEntries.delete(id);
+        }
+        return deleted.length;
+      } catch (err) {
+        console.warn("[entryService] DB deleteAll failed, using memory:", err);
+      }
+    }
+
+    let count = 0;
+    for (const [id, entry] of inMemoryEntries.entries()) {
+      if (entry.userId === userId) {
+        inMemoryEntries.delete(id);
+        count++;
+      }
+    }
+    return count;
   },
 };

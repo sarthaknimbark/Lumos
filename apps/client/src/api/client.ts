@@ -7,16 +7,24 @@
  */
 
 import {
+  AccountDataDeletionResponse,
   AiReflectionRequest,
   AiReflectionResponse,
   AttachmentResponse,
+  CalendarConnectInput,
+  CalendarEventItem,
+  CalendarStatusResponse,
   CreateAttachmentInput,
   CreateEntryInput,
   CreateTagInput,
   DriveBackupItem,
   DriveConnectInput,
   DriveStatusResponse,
+  ImportConfirmInput,
+  ImportConfirmResponse,
+  ImportPreviewResponse,
   JournalEntryResponse,
+  JournalExportPayload,
   ListEntriesQuery,
   RestoreConfirmResponse,
   RestorePreviewResponse,
@@ -340,6 +348,131 @@ export const api = {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err?.error?.message || "Failed to confirm restore");
+    }
+    return res.json();
+  },
+
+  /**
+   * Google Calendar Read-Only Integration (Phase 8)
+   */
+  async getCalendarStatus(): Promise<CalendarStatusResponse> {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_BASE_URL}/api/v1/integrations/calendar/status`, {
+      method: "GET",
+      headers,
+    });
+    if (!res.ok) {
+      return {
+        connected: false,
+        providerAccountId: null,
+        scopes: [],
+        lastSyncAt: null,
+      };
+    }
+    return res.json();
+  },
+
+  async connectCalendar(authCode: string): Promise<CalendarStatusResponse> {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_BASE_URL}/api/v1/integrations/calendar/connect`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ authCode }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || "Failed to connect Google Calendar");
+    }
+    return res.json();
+  },
+
+  async disconnectCalendar(): Promise<void> {
+    const headers = await getAuthHeaders();
+    await fetch(`${API_BASE_URL}/api/v1/integrations/calendar/disconnect`, {
+      method: "POST",
+      headers,
+    });
+  },
+
+  async getCalendarEvents(date: string): Promise<CalendarEventItem[]> {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_BASE_URL}/api/v1/integrations/calendar/events?date=${date}`, {
+      method: "GET",
+      headers,
+    });
+    if (!res.ok) return [];
+    const body = await res.json();
+    return body.events || [];
+  },
+
+  /**
+   * Export journal data in JSON or Markdown format
+   */
+  async exportData(format: "json" | "markdown"): Promise<JournalExportPayload | string> {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_BASE_URL}/api/v1/export?format=${format}`, {
+      method: "GET",
+      headers,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || "Failed to export data");
+    }
+    if (format === "markdown") {
+      return res.text();
+    }
+    return res.json();
+  },
+
+  /**
+   * Preview an import payload (detect conflicts and preview entries)
+   */
+  async previewImport(data: unknown): Promise<ImportPreviewResponse> {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_BASE_URL}/api/v1/import/preview`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ data }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || "Failed to preview import");
+    }
+    return res.json();
+  },
+
+  /**
+   * Confirm and execute import (merge or overwrite)
+   */
+  async confirmImport(
+    strategy: "merge" | "overwrite",
+    data: unknown
+  ): Promise<ImportConfirmResponse> {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_BASE_URL}/api/v1/import/confirm`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ strategy, data }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || "Failed to confirm import");
+    }
+    return res.json();
+  },
+
+  /**
+   * Irreversibly delete all owned account data
+   */
+  async deleteAccountData(): Promise<AccountDataDeletionResponse> {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_BASE_URL}/api/v1/account/data`, {
+      method: "DELETE",
+      headers,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || "Failed to delete account data");
     }
     return res.json();
   },

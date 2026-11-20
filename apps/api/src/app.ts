@@ -13,6 +13,7 @@ import { entriesRoutes } from "./routes/entries.js";
 import { healthRoutes } from "./routes/health.js";
 import { integrationsRoutes } from "./routes/integrations.js";
 import { tagsRoutes } from "./routes/tags.js";
+import { exportRoutes } from "./routes/export.js";
 
 export async function buildApp(env: Env): Promise<FastifyInstance> {
   const app = Fastify({
@@ -140,6 +141,7 @@ export async function buildApp(env: Env): Promise<FastifyInstance> {
   await app.register(tagsRoutes, { env, auth });
   await app.register(aiRoutes, { env, auth });
   await app.register(integrationsRoutes, { env, auth });
+  await app.register(exportRoutes, { env, auth });
 
   return app;
 }

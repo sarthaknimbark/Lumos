@@ -162,6 +162,19 @@ class DriveService {
     this.connections.delete(userId);
   }
 
+  clearUserData(userId: string): number {
+    this.connections.delete(userId);
+    this.backups.delete(userId);
+    let count = 0;
+    for (const [id, att] of this.attachments.entries()) {
+      if (att.userId === userId) {
+        this.attachments.delete(id);
+        count++;
+      }
+    }
+    return count;
+  }
+
   // --------------------------------------------------------------------------
   // 2. Versioned JSON Backup Generation
   // --------------------------------------------------------------------------

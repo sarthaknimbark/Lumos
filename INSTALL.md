@@ -139,6 +139,12 @@ The platform is designed to be resilient and modular:
 - **Safe Restore Workflow**: Backup snapshots include SHA-256 checksums and entry counts. The restore flow validates snapshots and supports both **Merge** (keeps newer entries) and **Overwrite** modes.
 - **Simulation Mode**: Works immediately in development without live Google Cloud credentials. When ready for production, enable "Google Drive API" in Google Cloud Console and set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
 
+### Google Calendar Integration (Phase 8)
+- **Strictly Read-Only**: Requests only `https://www.googleapis.com/auth/calendar.events.readonly`. It NEVER creates, updates, or deletes calendar events.
+- **Daily Reflection Context**: Displays the selected day's schedule items directly in the Today screen to give users context when writing reflections.
+- **Decoupled Architecture**: Fully optional. If disconnected or offline, the diary continues functioning with zero friction.
+- **Simulation Mode**: Provides contextual mock events in development when live Google credentials are not set.
+
 ### Real PostgreSQL Persistence
 When you want real, persistent data storage:
 1. **Start PostgreSQL**:
@@ -245,7 +251,7 @@ Run these commands from the monorepo root:
 | `pnpm dev:api` | Starts Fastify backend with hot-reload at `http://localhost:4000` |
 | `pnpm dev:web` | Starts Expo client in the browser at `http://localhost:8081` |
 | `pnpm dev:client` | Starts Metro bundler for Expo Go or Android Emulator |
-| `pnpm test` | Runs the 22 automated integration test suite |
+| `pnpm test` | Runs the 23 automated integration test suite |
 | `pnpm typecheck` | Validates TypeScript across all workspaces (contracts, db, core, api, client) |
 | `pnpm db:migrate` | Applies generated SQL migrations to connected PostgreSQL |
 | `pnpm db:seed` | Populates database with sample diary entries, tags, and reflections |
