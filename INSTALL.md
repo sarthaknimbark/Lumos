@@ -96,12 +96,13 @@ DATABASE_URL=postgresql://myday:myday_local_password@localhost:5432/myday
 # Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 AUTH_SECRET=dev_secret_change_this_before_production_32x
 
-# Token Encryption Key (For encrypting provider refresh tokens at rest)
+# Token Encryption Key (For encrypting provider refresh tokens at rest — AES-256-GCM)
 # Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 TOKEN_ENCRYPTION_KEY=dev_token_key_change_before_production_32x
 
-# Google OAuth (Optional: only needed if enabling Google Sign-In or Drive backup)
+# Google OAuth (Optional: only needed if enabling live Google Sign-In or Google Drive backup)
 # Configure credentials at https://console.cloud.google.com
+# Drive uses isolated app-specific scopes: drive.appdata and drive.file
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 
@@ -129,8 +130,14 @@ The platform is designed to be resilient and modular:
 
 ### Zero-DB Mode (Default out-of-the-box)
 - If `DATABASE_URL` is commented out or PostgreSQL is not running, the API automatically falls back to its in-memory transactional store.
-- All endpoints (journal CRUD, date navigation, search, tags, mood/energy, Groq reflection, offline sync) work 100% seamlessly.
+- All endpoints (journal CRUD, date navigation, search, tags, mood/energy, Groq reflection, offline sync, Google Drive backup snapshots, restore preview, and attachments) work 100% seamlessly.
 - Perfect for quickly testing UI, running automated tests, or evaluating the client without spinning up Docker/PostgreSQL.
+
+### Google Drive Integration (Phase 7)
+- **App-Owned Storage**: Backups use isolated `drive.appdata` / `drive.file` scopes so the app never accesses the user's personal Drive documents.
+- **AES-256 Token Encryption**: Provider refresh tokens are encrypted at rest with `TOKEN_ENCRYPTION_KEY`. Tokens never leak into logs or client bundles.
+- **Safe Restore Workflow**: Backup snapshots include SHA-256 checksums and entry counts. The restore flow validates snapshots and supports both **Merge** (keeps newer entries) and **Overwrite** modes.
+- **Simulation Mode**: Works immediately in development without live Google Cloud credentials. When ready for production, enable "Google Drive API" in Google Cloud Console and set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
 
 ### Real PostgreSQL Persistence
 When you want real, persistent data storage:
@@ -238,7 +245,7 @@ Run these commands from the monorepo root:
 | `pnpm dev:api` | Starts Fastify backend with hot-reload at `http://localhost:4000` |
 | `pnpm dev:web` | Starts Expo client in the browser at `http://localhost:8081` |
 | `pnpm dev:client` | Starts Metro bundler for Expo Go or Android Emulator |
-| `pnpm test` | Runs the 19+ automated integration test suite |
+| `pnpm test` | Runs the 22 automated integration test suite |
 | `pnpm typecheck` | Validates TypeScript across all workspaces (contracts, db, core, api, client) |
 | `pnpm db:migrate` | Applies generated SQL migrations to connected PostgreSQL |
 | `pnpm db:seed` | Populates database with sample diary entries, tags, and reflections |
