@@ -11,6 +11,7 @@ import { aiRoutes } from "./routes/ai.js";
 import { authRoutes } from "./routes/auth.js";
 import { entriesRoutes } from "./routes/entries.js";
 import { healthRoutes } from "./routes/health.js";
+import { integrationsRoutes } from "./routes/integrations.js";
 import { tagsRoutes } from "./routes/tags.js";
 
 export async function buildApp(env: Env): Promise<FastifyInstance> {
@@ -138,6 +139,7 @@ export async function buildApp(env: Env): Promise<FastifyInstance> {
   await app.register(entriesRoutes, { env, auth });
   await app.register(tagsRoutes, { env, auth });
   await app.register(aiRoutes, { env, auth });
+  await app.register(integrationsRoutes, { env, auth });
 
   return app;
 }

@@ -1,6 +1,8 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -10,13 +12,132 @@ import {
   View,
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { api } from "../../src/api/client";
 import { MOCK_USER_SETTINGS, PAST_ENTRIES_MOCK } from "../../src/mockData";
 import { UserSettingsMock } from "../../src/types";
 import { THEME } from "../../src/theme";
+import { DriveBackupItem, DriveStatusResponse, RestorePreviewResponse } from "@myday/contracts";
 
 export default function SettingsScreen() {
   const [settings, setSettings] = useState<UserSettingsMock>(MOCK_USER_SETTINGS);
   const [exportNotice, setExportNotice] = useState<string | null>(null);
+
+  // Google Drive State (Phase 7)
+  const [driveStatus, setDriveStatus] = useState<DriveStatusResponse>({
+    connected: false,
+    providerAccountId: null,
+    scopes: [],
+    lastBackupAt: null,
+    backupCount: 0,
+    appFolderName: "MyDay Backups",
+  });
+  const [backups, setBackups] = useState<DriveBackupItem[]>([]);
+  const [driveLoading, setDriveLoading] = useState(false);
+  const [restoreModalVisible, setRestoreModalVisible] = useState(false);
+  const [previewData, setPreviewData] = useState<RestorePreviewResponse | null>(null);
+
+  const loadDriveData = async () => {
+    try {
+      const status = await api.getDriveStatus();
+      setDriveStatus(status);
+      if (status.connected) {
+        const list = await api.listDriveBackups();
+        setBackups(list);
+      }
+    } catch {
+      // Offline fallback
+    }
+  };
+
+  useEffect(() => {
+    loadDriveData();
+  }, []);
+
+  const handleConnectDrive = async () => {
+    setDriveLoading(true);
+    try {
+      const updated = await api.connectDrive("auth_code_user_authorized_drive_scope");
+      setDriveStatus(updated);
+      const list = await api.listDriveBackups();
+      setBackups(list);
+      setExportNotice("Google Drive connected to app-owned folder.");
+      setTimeout(() => setExportNotice(null), 3000);
+    } catch (err: any) {
+      Alert.alert("Connection Error", err?.message || "Failed to connect Google Drive");
+    } finally {
+      setDriveLoading(false);
+    }
+  };
+
+  const handleDisconnectDrive = async () => {
+    setDriveLoading(true);
+    try {
+      await api.disconnectDrive();
+      setDriveStatus({
+        connected: false,
+        providerAccountId: null,
+        scopes: [],
+        lastBackupAt: null,
+        backupCount: 0,
+        appFolderName: "MyDay Backups",
+      });
+      setBackups([]);
+      setExportNotice("Google Drive disconnected.");
+      setTimeout(() => setExportNotice(null), 3000);
+    } catch {
+      // Ignore
+    } finally {
+      setDriveLoading(false);
+    }
+  };
+
+  const handleBackupNow = async () => {
+    setDriveLoading(true);
+    try {
+      const created = await api.createDriveBackup();
+      setBackups((prev) => [created, ...prev]);
+      setDriveStatus((prev) => ({
+        ...prev,
+        lastBackupAt: created.createdAt,
+        backupCount: prev.backupCount + 1,
+      }));
+      setExportNotice(`Created backup: ${created.filename} (${created.entryCount} entries)`);
+      setTimeout(() => setExportNotice(null), 4000);
+    } catch (err: any) {
+      Alert.alert("Backup Failed", err?.message || "Could not create backup snapshot");
+    } finally {
+      setDriveLoading(false);
+    }
+  };
+
+  const handlePreviewRestore = async (backupId: string) => {
+    setDriveLoading(true);
+    try {
+      const preview = await api.previewRestore(backupId);
+      setPreviewData(preview);
+      setRestoreModalVisible(true);
+    } catch (err: any) {
+      Alert.alert("Restore Preview Error", err?.message || "Could not read backup snapshot");
+    } finally {
+      setDriveLoading(false);
+    }
+  };
+
+  const handleConfirmRestore = async (strategy: "merge" | "overwrite") => {
+    if (!previewData) return;
+    setDriveLoading(true);
+    setRestoreModalVisible(false);
+
+    try {
+      const result = await api.confirmRestore(previewData.backupId, strategy);
+      setExportNotice(result.message);
+      setTimeout(() => setExportNotice(null), 4000);
+    } catch (err: any) {
+      Alert.alert("Restore Error", err?.message || "Failed to restore entries");
+    } finally {
+      setDriveLoading(false);
+    }
+  };
 
   const handleExportJSON = () => {
     const dataStr = JSON.stringify(PAST_ENTRIES_MOCK, null, 2);
@@ -29,15 +150,12 @@ export default function SettingsScreen() {
     setTimeout(() => setExportNotice(null), 3000);
   };
 
-  const showIntegrationNotice = (provider: "Drive" | "Calendar") => {
-    const msg =
-      provider === "Drive"
-        ? "Google Drive backup is an optional, separate user permission configured in Phase 7. Your diary works 100% offline without it."
-        : "Google Calendar is an optional, read-only context feature configured in Phase 8. No calendar events are modified or created.";
+  const showCalendarNotice = () => {
+    const msg = "Google Calendar is an optional, read-only context feature configured in Phase 8. No calendar events are modified or created.";
     if (Platform.OS === "web") {
       alert(msg);
     } else {
-      Alert.alert(provider, msg);
+      Alert.alert("Google Calendar", msg);
     }
   };
 
@@ -80,6 +198,93 @@ export default function SettingsScreen() {
           <View style={styles.exportNoticeBox}>
             <Ionicons name="checkmark-circle-outline" size={15} color={THEME.colors.emerald} style={{ marginRight: 6 }} />
             <Text style={styles.exportNoticeText}>{exportNotice}</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Google Drive Integration (Phase 7) */}
+      <Text style={styles.sectionHeading}>CLOUD BACKUP (GOOGLE DRIVE)</Text>
+      <View style={styles.card}>
+        <View style={styles.integrationRow}>
+          <View style={styles.integrationIcon}>
+            <Ionicons name="cloud-upload-outline" size={20} color={THEME.colors.accent} />
+          </View>
+          <View style={styles.integrationInfo}>
+            <Text style={styles.integrationName}>App-Owned Backup Folder</Text>
+            <Text style={styles.integrationStatus}>
+              {driveStatus.connected
+                ? `Connected (${driveStatus.providerAccountId || "Google Account"})`
+                : "Disconnected — diary works 100% offline"}
+            </Text>
+          </View>
+          <Pressable
+            style={[
+              styles.connectButton,
+              driveStatus.connected && styles.connectButtonDisconnect,
+            ]}
+            onPress={driveStatus.connected ? handleDisconnectDrive : handleConnectDrive}
+            disabled={driveLoading}
+          >
+            {driveLoading ? (
+              <ActivityIndicator size="small" color={THEME.colors.textPrimary} />
+            ) : (
+              <Text
+                style={[
+                  styles.connectButtonText,
+                  driveStatus.connected && styles.connectButtonTextDisconnect,
+                ]}
+              >
+                {driveStatus.connected ? "Disconnect" : "Connect"}
+              </Text>
+            )}
+          </Pressable>
+        </View>
+
+        {driveStatus.connected && (
+          <View style={styles.driveActionsBlock}>
+            <View style={styles.driveMetaRow}>
+              <Text style={styles.driveMetaLabel}>Last Backup:</Text>
+              <Text style={styles.driveMetaValue}>
+                {driveStatus.lastBackupAt
+                  ? new Date(driveStatus.lastBackupAt).toLocaleString()
+                  : "Never"}
+              </Text>
+            </View>
+
+            <Pressable
+              style={styles.backupNowButton}
+              onPress={handleBackupNow}
+              disabled={driveLoading}
+            >
+              <Ionicons name="cloud-upload" size={16} color="#ffffff" style={{ marginRight: 6 }} />
+              <Text style={styles.backupNowButtonText}>
+                {driveLoading ? "Creating Backup..." : "Create Backup Now"}
+              </Text>
+            </Pressable>
+
+            {/* Backups List */}
+            {backups.length > 0 && (
+              <View style={styles.backupsHistoryContainer}>
+                <Text style={styles.backupHistoryTitle}>Backup Snapshots ({backups.length})</Text>
+                {backups.map((b) => (
+                  <View key={b.id} style={styles.backupHistoryItem}>
+                    <View style={styles.backupItemLeft}>
+                      <Text style={styles.backupItemName}>{b.filename}</Text>
+                      <Text style={styles.backupItemSub}>
+                        {new Date(b.createdAt).toLocaleDateString()} • {b.entryCount} entries • {Math.round(b.sizeBytes / 1024)} KB
+                      </Text>
+                    </View>
+                    <Pressable
+                      style={styles.restoreButton}
+                      onPress={() => handlePreviewRestore(b.id)}
+                    >
+                      <Ionicons name="arrow-undo-outline" size={13} color={THEME.colors.accent} style={{ marginRight: 4 }} />
+                      <Text style={styles.restoreButtonText}>Restore</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
         )}
       </View>
@@ -131,45 +336,20 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      {/* Optional Integrations */}
-      <Text style={styles.sectionHeading}>OPTIONAL INTEGRATIONS</Text>
+      {/* Google Calendar (Phase 8 Preview) */}
+      <Text style={styles.sectionHeading}>GOOGLE CALENDAR (PHASE 8)</Text>
       <View style={styles.card}>
         <View style={styles.integrationRow}>
-          <View style={styles.integrationIcon}>
-            <Ionicons name="cloud-outline" size={20} color={THEME.colors.accent} />
-          </View>
-          <View style={styles.integrationInfo}>
-            <Text style={styles.integrationName}>Google Drive Backup</Text>
-            <Text style={styles.integrationStatus}>
-              {settings.driveBackupStatus === "connected"
-                ? "Connected"
-                : "Disconnected (Phase 7)"}
-            </Text>
-          </View>
-          <Pressable
-            style={styles.connectButton}
-            onPress={() => showIntegrationNotice("Drive")}
-          >
-            <Text style={styles.connectButtonText}>Details</Text>
-          </Pressable>
-        </View>
-
-        <View style={[styles.integrationRow, styles.rowBorderTop]}>
           <View style={styles.integrationIcon}>
             <Ionicons name="calendar-outline" size={20} color={THEME.colors.accent} />
           </View>
           <View style={styles.integrationInfo}>
             <Text style={styles.integrationName}>Google Calendar (Read-Only)</Text>
             <Text style={styles.integrationStatus}>
-              {settings.calendarSyncStatus === "connected"
-                ? "Connected"
-                : "Disconnected (Phase 8)"}
+              Disconnected (Optional context in Phase 8)
             </Text>
           </View>
-          <Pressable
-            style={styles.connectButton}
-            onPress={() => showIntegrationNotice("Calendar")}
-          >
+          <Pressable style={styles.connectButton} onPress={showCalendarNotice}>
             <Text style={styles.connectButtonText}>Details</Text>
           </Pressable>
         </View>
@@ -203,13 +383,56 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      {/* About */}
-      <View style={styles.aboutCard}>
-        <Text style={styles.aboutTitle}>MyDay Platform v0.1.0</Text>
-        <Text style={styles.aboutSubtitle}>
-          Independent personal platform for calm daily reflection and memory preservation.
-        </Text>
-      </View>
+      {/* Restore Confirmation Modal */}
+      <Modal
+        visible={restoreModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRestoreModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalTitleRow}>
+              <Ionicons name="cloud-download-outline" size={24} color={THEME.colors.accent} />
+              <Text style={styles.modalTitle}>Restore Backup</Text>
+            </View>
+
+            {previewData && (
+              <>
+                <Text style={styles.modalBody}>
+                  Snapshot contains <Text style={{ color: THEME.colors.textPrimary, fontWeight: "700" }}>{previewData.entryCount} entries</Text> from {new Date(previewData.createdAt).toLocaleDateString()}.
+                </Text>
+                <Text style={styles.modalSub}>
+                  Select how you would like to restore these entries:
+                </Text>
+
+                <View style={styles.modalActions}>
+                  <Pressable
+                    style={styles.modalBtnMerge}
+                    onPress={() => handleConfirmRestore("merge")}
+                  >
+                    <Text style={styles.modalBtnMergeText}>Merge (Keep Newer)</Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={styles.modalBtnOverwrite}
+                    onPress={() => handleConfirmRestore("overwrite")}
+                  >
+                    <Text style={styles.modalBtnOverwriteText}>Overwrite All</Text>
+                  </Pressable>
+                </View>
+
+                <Pressable
+                  style={styles.modalCancelBtn}
+                  onPress={() => setRestoreModalVisible(false)}
+                >
+                  <Text style={styles.modalCancelBtnText}>Cancel</Text>
+                </Pressable>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -423,10 +646,100 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: THEME.colors.border,
   },
+  connectButtonDisconnect: {
+    backgroundColor: THEME.colors.roseMuted,
+    borderColor: "rgba(244, 63, 94, 0.25)",
+  },
   connectButtonText: {
     fontSize: 12,
     fontWeight: "600",
     color: THEME.colors.textSecondary,
+  },
+  connectButtonTextDisconnect: {
+    color: THEME.colors.rose,
+  },
+  driveActionsBlock: {
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: THEME.colors.borderSubtle,
+  },
+  driveMetaRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  driveMetaLabel: {
+    fontSize: 12,
+    color: THEME.colors.textTertiary,
+  },
+  driveMetaValue: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: THEME.colors.textSecondary,
+  },
+  backupNowButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: THEME.colors.accent,
+    paddingVertical: 10,
+    borderRadius: THEME.radius.md,
+    marginBottom: 12,
+  },
+  backupNowButtonText: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  backupsHistoryContainer: {
+    gap: 8,
+  },
+  backupHistoryTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: THEME.colors.textTertiary,
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  backupHistoryItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: THEME.colors.surfaceSubtle,
+    borderRadius: THEME.radius.md,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: THEME.colors.borderSubtle,
+  },
+  backupItemLeft: {
+    flex: 1,
+    marginRight: 10,
+  },
+  backupItemName: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: THEME.colors.textPrimary,
+  },
+  backupItemSub: {
+    fontSize: 11,
+    color: THEME.colors.textTertiary,
+    marginTop: 2,
+  },
+  restoreButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: THEME.radius.sm,
+    backgroundColor: THEME.colors.accentMuted,
+    borderWidth: 1,
+    borderColor: THEME.colors.accentBorder,
+  },
+  restoreButtonText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: THEME.colors.accent,
   },
   storageRow: {
     flexDirection: "row",
@@ -447,22 +760,81 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: THEME.colors.textPrimary,
   },
-  aboutCard: {
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.75)",
+    justifyContent: "center",
     alignItems: "center",
-    paddingVertical: 14,
-    gap: 4,
+    padding: 20,
   },
-  aboutTitle: {
-    fontSize: 12,
+  modalCard: {
+    backgroundColor: THEME.colors.surface,
+    borderRadius: THEME.radius.xl,
+    padding: 22,
+    maxWidth: 420,
+    width: "100%",
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+  },
+  modalTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 10,
+  },
+  modalTitle: {
+    fontSize: 17,
     fontWeight: "700",
-    color: THEME.colors.textTertiary,
-    letterSpacing: 0.5,
+    color: THEME.colors.textPrimary,
   },
-  aboutSubtitle: {
+  modalBody: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: THEME.colors.textSecondary,
+    marginBottom: 4,
+  },
+  modalSub: {
     fontSize: 12,
     color: THEME.colors.textTertiary,
-    textAlign: "center",
-    maxWidth: 320,
-    lineHeight: 16,
+    marginBottom: 16,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 10,
+  },
+  modalBtnMerge: {
+    flex: 1,
+    backgroundColor: THEME.colors.accent,
+    paddingVertical: 10,
+    borderRadius: THEME.radius.md,
+    alignItems: "center",
+  },
+  modalBtnMergeText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  modalBtnOverwrite: {
+    flex: 1,
+    backgroundColor: THEME.colors.surfaceSubtle,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    paddingVertical: 10,
+    borderRadius: THEME.radius.md,
+    alignItems: "center",
+  },
+  modalBtnOverwriteText: {
+    color: THEME.colors.textPrimary,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  modalCancelBtn: {
+    alignItems: "center",
+    paddingVertical: 6,
+  },
+  modalCancelBtnText: {
+    fontSize: 12,
+    color: THEME.colors.textTertiary,
   },
 });

@@ -383,6 +383,136 @@ async function runTests() {
     }
   });
 
+  // 16. Phase 7: AES-256-GCM Token Encryption roundtrip
+  await test("AES-256-GCM token encryption and decryption preserves secret without plain exposure", async () => {
+    const { encryptToken, decryptToken } = await import("../src/services/driveService.js");
+    const secret = "test_encryption_key_32_chars_ok!";
+    const rawToken = "1//04example_google_refresh_token_very_secret";
+    const encrypted = encryptToken(rawToken, secret);
+
+    if (encrypted === rawToken || !encrypted.includes(":")) {
+      throw new Error("Encrypted token must differ from plain and include IV:Tag:Data format");
+    }
+    const decrypted = decryptToken(encrypted, secret);
+    if (decrypted !== rawToken) {
+      throw new Error(`Decrypted token '${decrypted}' does not match original '${rawToken}'`);
+    }
+  });
+
+  // 17. Phase 7: Drive Status, Connect, Backup, and History
+  await test("Google Drive: Status, Connect, Create Backup, and List Backups", async () => {
+    // 17.1 Initial status is disconnected
+    const statusRes = await app.inject({
+      method: "GET",
+      url: "/api/v1/integrations/drive/status",
+    });
+    if (statusRes.statusCode !== 200) throw new Error(`Expected 200, got ${statusRes.statusCode}`);
+    if (statusRes.json().connected !== false) throw new Error("Expected disconnected initially");
+
+    // 17.2 Connect Drive
+    const connectRes = await app.inject({
+      method: "POST",
+      url: "/api/v1/integrations/drive/connect",
+      payload: { authCode: "4/0AeanS0_example_auth_code_from_consent" },
+    });
+    if (connectRes.statusCode !== 200) throw new Error(`Expected 200, got ${connectRes.statusCode}`);
+    if (connectRes.json().connected !== true) throw new Error("Expected connected after connect call");
+
+    // 17.3 Create Backup
+    const backupRes = await app.inject({
+      method: "POST",
+      url: "/api/v1/integrations/drive/backup",
+    });
+    if (backupRes.statusCode !== 200) throw new Error(`Expected 200, got ${backupRes.statusCode}`);
+    const backup = backupRes.json();
+    if (!backup.id || !backup.checksum || backup.entryCount === undefined) {
+      throw new Error(`Invalid backup response: ${JSON.stringify(backup)}`);
+    }
+
+    // 17.4 List Backups
+    const listRes = await app.inject({
+      method: "GET",
+      url: "/api/v1/integrations/drive/backups",
+    });
+    if (listRes.statusCode !== 200) throw new Error(`Expected 200, got ${listRes.statusCode}`);
+    const { backups } = listRes.json();
+    if (!Array.isArray(backups) || backups.length === 0) {
+      throw new Error("Expected at least one backup in history");
+    }
+
+    // 17.5 Preview Restore
+    const previewRes = await app.inject({
+      method: "POST",
+      url: "/api/v1/integrations/drive/restore/preview",
+      payload: { backupId: backup.id },
+    });
+    if (previewRes.statusCode !== 200) throw new Error(`Expected 200, got ${previewRes.statusCode}`);
+    const preview = previewRes.json();
+    if (preview.entryCount !== backup.entryCount) {
+      throw new Error("Expected preview entry count to match backup entry count");
+    }
+
+    // 17.6 Confirm Restore (Merge)
+    const restoreRes = await app.inject({
+      method: "POST",
+      url: "/api/v1/integrations/drive/restore/confirm",
+      payload: { backupId: backup.id, strategy: "merge" },
+    });
+    if (restoreRes.statusCode !== 200) throw new Error(`Expected 200, got ${restoreRes.statusCode}`);
+    if (restoreRes.json().success !== true) throw new Error("Expected success: true on restore confirm");
+  });
+
+  // 18. Phase 7: Attachments CRUD and Isolation
+  await test("Attachments: Add, List, and Delete linked to entry", async () => {
+    // 18.1 Create entry first
+    const entryRes = await app.inject({
+      method: "POST",
+      url: "/api/v1/entries",
+      payload: {
+        entryDate: "2025-06-01",
+        title: "Entry with Attachment",
+        body: "Testing file attachments from Google Drive.",
+        sections: [],
+      },
+    });
+    const entryId = entryRes.json().data.id;
+
+    // 18.2 Add Attachment
+    const addRes = await app.inject({
+      method: "POST",
+      url: `/api/v1/entries/${entryId}/attachments`,
+      payload: {
+        providerFileId: "1abc_drive_file_id_xyz",
+        filename: "journal_sketch.png",
+        mimeType: "image/png",
+        sizeBytes: 1048576, // 1MB
+      },
+    });
+    if (addRes.statusCode !== 201) throw new Error(`Expected 201, got ${addRes.statusCode}`);
+    const attachment = addRes.json();
+    if (attachment.filename !== "journal_sketch.png") {
+      throw new Error("Expected filename journal_sketch.png");
+    }
+
+    // 18.3 List Attachments
+    const getRes = await app.inject({
+      method: "GET",
+      url: `/api/v1/entries/${entryId}/attachments`,
+    });
+    if (getRes.statusCode !== 200) throw new Error(`Expected 200, got ${getRes.statusCode}`);
+    const list = getRes.json();
+    if (!Array.isArray(list) || list.length !== 1) {
+      throw new Error("Expected 1 attachment");
+    }
+
+    // 18.4 Delete Attachment
+    const delRes = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/attachments/${attachment.id}`,
+    });
+    if (delRes.statusCode !== 200) throw new Error(`Expected 200, got ${delRes.statusCode}`);
+  });
+
   await app.close();
 
   console.log(`\nResults: ${passed} passed, ${failed} failed.\n`);

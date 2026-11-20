@@ -186,3 +186,87 @@ export const ConflictResolutionSchema = z.object({
   localPayload: z.unknown().optional(),
 });
 export type ConflictResolution = z.infer<typeof ConflictResolutionSchema>;
+
+/**
+ * 7. Google Drive Integration & Attachments DTOs (Phase 7)
+ */
+export const DriveStatusResponseSchema = z.object({
+  connected: z.boolean(),
+  providerAccountId: z.string().nullable().optional(),
+  scopes: z.array(z.string()).optional(),
+  lastBackupAt: z.string().nullable().optional(),
+  backupCount: z.number().int().default(0),
+  appFolderName: z.string().default("MyDay Backups"),
+});
+export type DriveStatusResponse = z.infer<typeof DriveStatusResponseSchema>;
+
+export const DriveConnectInputSchema = z.object({
+  authCode: z.string().min(1, "Authorization code is required"),
+  redirectUri: z.string().url().optional(),
+});
+export type DriveConnectInput = z.infer<typeof DriveConnectInputSchema>;
+
+export const DriveBackupItemSchema = z.object({
+  id: z.string(),
+  filename: z.string(),
+  sizeBytes: z.number().int(),
+  entryCount: z.number().int(),
+  checksum: z.string(),
+  createdAt: z.string(),
+  version: z.string().default("1.0.0"),
+});
+export type DriveBackupItem = z.infer<typeof DriveBackupItemSchema>;
+
+export const DriveBackupListResponseSchema = z.object({
+  backups: z.array(DriveBackupItemSchema),
+});
+export type DriveBackupListResponse = z.infer<typeof DriveBackupListResponseSchema>;
+
+export const RestorePreviewRequestSchema = z.object({
+  backupId: z.string().min(1, "Backup ID is required"),
+});
+export type RestorePreviewRequest = z.infer<typeof RestorePreviewRequestSchema>;
+
+export const RestorePreviewResponseSchema = z.object({
+  backupId: z.string(),
+  filename: z.string(),
+  version: z.string(),
+  createdAt: z.string(),
+  entryCount: z.number().int(),
+  previewDates: z.array(z.string()),
+});
+export type RestorePreviewResponse = z.infer<typeof RestorePreviewResponseSchema>;
+
+export const RestoreConfirmRequestSchema = z.object({
+  backupId: z.string().min(1, "Backup ID is required"),
+  strategy: z.enum(["merge", "overwrite"]).default("merge"),
+});
+export type RestoreConfirmRequest = z.infer<typeof RestoreConfirmRequestSchema>;
+
+export const RestoreConfirmResponseSchema = z.object({
+  success: z.boolean(),
+  restoredCount: z.number().int(),
+  message: z.string(),
+});
+export type RestoreConfirmResponse = z.infer<typeof RestoreConfirmResponseSchema>;
+
+export const CreateAttachmentInputSchema = z.object({
+  providerFileId: z.string().min(1),
+  filename: z.string().min(1).max(255),
+  mimeType: z.string().min(1).max(100),
+  sizeBytes: z.number().int().positive().max(25 * 1024 * 1024, "File size must not exceed 25MB"),
+});
+export type CreateAttachmentInput = z.infer<typeof CreateAttachmentInputSchema>;
+
+export const AttachmentResponseSchema = z.object({
+  id: z.string().uuid(),
+  entryId: z.string().uuid(),
+  provider: z.string(),
+  providerFileId: z.string(),
+  filename: z.string(),
+  mimeType: z.string(),
+  sizeBytes: z.number().int(),
+  createdAt: z.string(),
+});
+export type AttachmentResponse = z.infer<typeof AttachmentResponseSchema>;
+

@@ -9,10 +9,17 @@
 import {
   AiReflectionRequest,
   AiReflectionResponse,
+  AttachmentResponse,
+  CreateAttachmentInput,
   CreateEntryInput,
   CreateTagInput,
+  DriveBackupItem,
+  DriveConnectInput,
+  DriveStatusResponse,
   JournalEntryResponse,
   ListEntriesQuery,
+  RestoreConfirmResponse,
+  RestorePreviewResponse,
   TagResponse,
   UpdateEntryInput,
 } from "@myday/contracts";
@@ -236,5 +243,104 @@ export const api = {
 
     const body = await res.json();
     return body.data;
+  },
+
+  /**
+   * Google Drive Integration (Phase 7)
+   */
+  async getDriveStatus(): Promise<DriveStatusResponse> {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_BASE_URL}/api/v1/integrations/drive/status`, {
+      method: "GET",
+      headers,
+    });
+    if (!res.ok) {
+      return {
+        connected: false,
+        providerAccountId: null,
+        scopes: [],
+        lastBackupAt: null,
+        backupCount: 0,
+        appFolderName: "MyDay Backups",
+      };
+    }
+    return res.json();
+  },
+
+  async connectDrive(authCode: string): Promise<DriveStatusResponse> {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_BASE_URL}/api/v1/integrations/drive/connect`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ authCode }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || "Failed to connect Google Drive");
+    }
+    return res.json();
+  },
+
+  async disconnectDrive(): Promise<void> {
+    const headers = await getAuthHeaders();
+    await fetch(`${API_BASE_URL}/api/v1/integrations/drive/disconnect`, {
+      method: "POST",
+      headers,
+    });
+  },
+
+  async createDriveBackup(): Promise<DriveBackupItem> {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_BASE_URL}/api/v1/integrations/drive/backup`, {
+      method: "POST",
+      headers,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || "Failed to create Google Drive backup");
+    }
+    return res.json();
+  },
+
+  async listDriveBackups(): Promise<DriveBackupItem[]> {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_BASE_URL}/api/v1/integrations/drive/backups`, {
+      method: "GET",
+      headers,
+    });
+    if (!res.ok) return [];
+    const body = await res.json();
+    return body.backups || [];
+  },
+
+  async previewRestore(backupId: string): Promise<RestorePreviewResponse> {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_BASE_URL}/api/v1/integrations/drive/restore/preview`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ backupId }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || "Failed to preview restore snapshot");
+    }
+    return res.json();
+  },
+
+  async confirmRestore(
+    backupId: string,
+    strategy: "merge" | "overwrite" = "merge"
+  ): Promise<RestoreConfirmResponse> {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_BASE_URL}/api/v1/integrations/drive/restore/confirm`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ backupId, strategy }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || "Failed to confirm restore");
+    }
+    return res.json();
   },
 };

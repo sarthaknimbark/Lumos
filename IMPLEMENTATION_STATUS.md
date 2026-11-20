@@ -1,6 +1,6 @@
 # Implementation Status
 
-Current status: Phase 6 complete. Ready for Phase 7 (Google Drive backup and attachments).
+Current status: Phase 7 complete. Ready for Phase 8 (Google Calendar read-only integration).
 
 ## Phases
 - [x] 0 — Monorepo and tooling
@@ -10,7 +10,7 @@ Current status: Phase 6 complete. Ready for Phase 7 (Google Drive backup and att
 - [x] 4 — Authentication and account isolation (Better Auth + Google Sign-In structure + SecureStore)
 - [x] 5 — Journal, calendar, search, mood, tags (Drizzle persistence + universal client integration)
 - [x] 6 — Native/web offline drafts and sync (IndexedDB on web, SecureStore on native, queue & conflict UI)
-- [ ] 7 — Google Drive backup and attachments
+- [x] 7 — Google Drive backup and attachments
 - [ ] 8 — Google Calendar read-only integration
 - [ ] 9 — Export/import, security, testing
 - [ ] 10 — Cloud deployment and Android release preparation
@@ -57,6 +57,15 @@ Current status: Phase 6 complete. Ready for Phase 7 (Google Drive backup and att
   - Added backend idempotency replay protection (`x-idempotency-key`) in Fastify `/api/v1/entries` ensuring network retries return cached results without duplicate writes or conflicts.
   - Integrated offline sync banner ("X offline changes waiting to sync", "Sync Now") and explicit Conflict Resolution Dialog in the Entry Editor ("Keep Server Version" vs "Overwrite with My Changes" — never silently overwrites).
   - 19 automated integration tests passing and clean Metro web bundle exported.
+- Phase 7: Google Drive backup and attachments:
+  - Added Drive & Attachment contracts in `@myday/contracts` (`DriveStatusResponse`, `DriveConnectInput`, `DriveBackupItem`, `DriveBackupListResponse`, `RestorePreviewRequest`, `RestorePreviewResponse`, `RestoreConfirmRequest`, `RestoreConfirmResponse`, `CreateAttachmentInput`, `AttachmentResponse`).
+  - Implemented AES-256-GCM server-side token encryption for provider refresh tokens in `apps/api/src/services/driveService.ts` (`TOKEN_ENCRYPTION_KEY`). Tokens are never returned to clients or logged.
+  - Implemented app-owned isolated folder (`drive.appdata` / `drive.file` scope) for versioned JSON backups with SHA-256 checksum validation.
+  - Implemented backup snapshots, history listing, restore preview, and merge vs. overwrite restore options.
+  - Implemented entry attachments metadata tracking linked to journal entries with file size (< 25MB) and MIME validation.
+  - Mounted endpoints under `/api/v1/integrations/drive/*` and `/api/v1/entries/:id/attachments` with strict user ownership isolation.
+  - Connected Drive cloud backup card in `apps/client/app/(tabs)/settings.tsx` with live status, Backup Now trigger, history list, and restore dialog.
+  - 22 automated integration tests passing, clean typecheck, and clean Metro web export.
 
 ## Manual Configuration Needed for Live Auth
 

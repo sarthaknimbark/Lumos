@@ -18,6 +18,7 @@ const EnvSchema = z.object({
     .default("dev_secret_change_this_in_production_min32chars"),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
+  TOKEN_ENCRYPTION_KEY: z.string().optional(),
   // ── Dev bypass ───────────────────────────────────────────────────────────
   ENABLE_TEST_USER_BYPASS: z.coerce
     .boolean()
