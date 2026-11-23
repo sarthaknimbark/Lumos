@@ -34,6 +34,7 @@
 
 ## Privacy
 - No AI processing or third-party diary content transfer by default.
+- **Voice Privacy**: Voice recordings are saved directly as raw audio files (`.m4a` / `.webm`) for playback only. Spoken words are NEVER sent to speech-to-text models or transcribed to text, safeguarding total voice privacy.
 - Explain storage/provider behavior and backup limitations.
 - Export data to JSON/Markdown.
 - Deletion workflow must remove owned records and integration tokens.

@@ -668,7 +668,7 @@ export const entryService = {
    */
   async getAllForUser(userId: string): Promise<JournalEntryResponse[]> {
     const listRes = await this.list(userId, { limit: 10000, offset: 0 });
-    return listRes.items.sort((a, b) => a.entryDate.localeCompare(b.entryDate));
+    return listRes.data.sort((a, b) => a.entryDate.localeCompare(b.entryDate));
   },
 
   /**

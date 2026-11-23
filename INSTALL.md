@@ -145,6 +145,12 @@ The platform is designed to be resilient and modular:
 - **Decoupled Architecture**: Fully optional. If disconnected or offline, the diary continues functioning with zero friction.
 - **Simulation Mode**: Provides contextual mock events in development when live Google credentials are not set.
 
+### Dual-Mode Entry & Media Architecture
+- **Type Mode vs. Record Mode**: Users can select between text typing and live audio voice recording with animated sound waveforms and inline playback.
+- **In-line Picture Attachments**: Supports adding pictures to entries with multi-image bento grids, captions, and full-screen lightbox preview.
+- **Bespoke Luxury OLED Design**: Deep OLED matte slate (`#08090c`), dark titanium card surfaces (`#11131a`), precision iris accent (`#6366f1`), and zero colored emojis (monochrome outline vectors transitioning to theme solid fills).
+- **Responsive Navigation**: Mobile-first bottom navigation bar and desktop collapsible sidebar rail with dual-column bento dashboard.
+
 ### Real PostgreSQL Persistence
 When you want real, persistent data storage:
 1. **Start PostgreSQL**:

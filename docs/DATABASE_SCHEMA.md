@@ -41,12 +41,18 @@ Use Better Auth's current Drizzle adapter schema. Do not hand-invent auth tables
 - entry_id UUID FK, tag_id UUID FK
 - composite primary key `(entry_id, tag_id)`
 
-### attachments
+### attachments (Photos, Audio Notes & Documents)
 - id UUID, user_id UUID, entry_id UUID FK
-- provider TEXT (`google_drive` initially)
+- media_type TEXT (`photo`, `audio_note`, `file`)
+- provider TEXT (`google_drive`, `local`, `s3`)
 - provider_file_id TEXT
-- filename, mime_type, size_bytes
-- created_at
+- url TEXT
+- filename TEXT, mime_type TEXT, size_bytes INTEGER
+- duration_seconds INTEGER nullable (for audio notes)
+- waveform JSONB nullable (array of audio levels for playback visualizer)
+- caption TEXT nullable (for photo memories)
+- width INTEGER nullable, height INTEGER nullable
+- created_at TIMESTAMPTZ
 - unique `(user_id, provider, provider_file_id)`
 
 ### goals (later)

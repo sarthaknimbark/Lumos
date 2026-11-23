@@ -36,7 +36,7 @@ export const exportService = {
       body: e.body,
       mood: e.mood,
       energy: e.energy,
-      status: e.status,
+      status: e.status === "draft" ? "draft" : "published",
       isFavorite: e.isFavorite,
       revision: e.revision,
       tags: e.tags,
@@ -227,7 +227,7 @@ export const exportService = {
   async deleteAccountData(userId: string): Promise<AccountDataDeletionResponse> {
     const deletedEntriesCount = await entryService.deleteAllForUser(userId);
     const deletedAttachmentsCount = driveService.clearUserData(userId);
-    calendarService.disconnect(userId);
+    calendarService.disconnect(userId, {} as any);
 
     return {
       success: true,

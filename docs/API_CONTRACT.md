@@ -14,12 +14,12 @@ All API inputs/outputs use shared Zod schemas in `packages/contracts`. Publish O
 - `PATCH /api/v1/entries/:id` — requires base revision
 - `DELETE /api/v1/entries/:id` — soft delete
 
-Example create:
+Example create (supporting text, voice notes & photo attachments):
 ```json
 {
   "entryDate": "2026-11-14",
   "title": "A day worth remembering",
-  "body": "Markdown journal text",
+  "body": "Markdown journal text (voice notes saved directly as audio files without speech-to-text transcription)",
   "mood": 4,
   "energy": 3,
   "status": "published",
@@ -27,7 +27,25 @@ Example create:
     {"type": "gratitude", "content": "A good conversation"},
     {"type": "highlights", "content": "Finished a project"}
   ],
-  "tags": ["work", "personal"]
+  "tags": ["work", "personal"],
+  "audioNotes": [
+    {
+      "id": "11111111-2222-3333-4444-555555555555",
+      "url": "https://storage.myday.app/audio/clip_01.m4a",
+      "durationSeconds": 102,
+      "mimeType": "audio/m4a",
+      "waveform": [12, 24, 45, 60, 32, 18, 55, 78, 20]
+    }
+  ],
+  "photos": [
+    {
+      "id": "22222222-3333-4444-5555-666666666666",
+      "url": "https://storage.myday.app/photos/img_01.jpg",
+      "caption": "Sunset from the rooftop",
+      "sizeBytes": 1420500,
+      "mimeType": "image/jpeg"
+    }
+  ]
 }
 ```
 

@@ -10,13 +10,9 @@
 
 import { FastifyInstance, FastifyPluginOptions } from "fastify";
 import {
-  AccountDataDeletionResponseSchema,
   ExportQuerySchema,
   ImportConfirmInputSchema,
-  ImportConfirmResponseSchema,
   ImportPreviewInputSchema,
-  ImportPreviewResponseSchema,
-  JournalExportPayloadSchema,
 } from "@myday/contracts";
 import { Env } from "../config.js";
 import { createAuthGuard } from "../middleware/auth.js";

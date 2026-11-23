@@ -17,6 +17,10 @@ Current status: Phase 8 complete. Ready for Phase 9 (Export/import, security, te
 
 ## Fixed decisions
 - Universal client: Expo + React Native + Expo Router (Android/iOS/web)
+- Dual-Mode Entry Creation: Immediate choice between **Type Mode** (rich text + structured sections) and **Record Mode** (live audio waveform recording + audio playback).
+- In-line Picture Attachments: Photo memories bento grid with captions and lightbox viewer attachable across both modes.
+- Design Language & Iconography: High-craft bespoke luxury OLED matte slate (`#08090c`), dark titanium card surfaces (`#11131a`), and hairline borders (`rgba(255,255,255,0.08)`). Zero colored emojis: 2px monochrome outline vector icons that fill solid with theme accents upon selection.
+- Responsive Layout: Native bottom tab bar on mobile (<768px); collapsible left navigation rail + 680px editorial writing canvas + contextual bento rail on desktop web (≥768px).
 - Backend: Fastify + TypeScript
 - Database: PostgreSQL
 - ORM: Drizzle
