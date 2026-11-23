@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -12,32 +13,27 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { api } from "../../src/api/client";
 import { PAST_ENTRIES_MOCK } from "../../src/mockData";
 import { THEME, THEME_MOODS } from "../../src/theme";
-import { JournalEntryResponse } from "@myday/contracts";
+import { JournalEntryResponse, PhotoAttachment } from "@myday/contracts";
+import { PhotoLightboxModal } from "../../src/components/PhotoLightboxModal";
 
-function formatDisplayDate(dateStr: string) {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const date = new Date(y, m - 1, d);
-  return date.toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
+type FilterTab = "all" | "voice" | "photo";
 
 export default function TimelineScreen() {
   const [entries, setEntries] = useState<JournalEntryResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [onlyFavorites, setOnlyFavorites] = useState(false);
-  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<FilterTab>("all");
+  const [selectedDayOffset, setSelectedDayOffset] = useState<number>(0);
+  const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
+
+  // Lightbox State
+  const [lightboxVisible, setLightboxVisible] = useState(false);
+  const [lightboxPhotos, setLightboxPhotos] = useState<PhotoAttachment[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
 
   const loadEntries = async () => {
     try {
-      const res = await api.getEntries({
-        isFavorite: onlyFavorites ? true : undefined,
-        limit: 50,
-      });
+      const res = await api.getEntries({ limit: 50 });
       setEntries(res.data);
     } catch {
       // Offline fallback: use mock data
@@ -61,12 +57,12 @@ export default function TimelineScreen() {
           updatedAt: new Date().toISOString(),
         })),
         tags: m.tags,
-        audioNotes: [],
-        photos: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        audioNotes: m.audioNotes || [],
+        photos: m.photos || [],
+        createdAt: m.createdAt,
+        updatedAt: m.updatedAt,
       }));
-      setEntries(onlyFavorites ? fallback.filter((e) => e.isFavorite) : fallback);
+      setEntries(fallback);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -74,14 +70,51 @@ export default function TimelineScreen() {
   };
 
   useEffect(() => {
-    setLoading(true);
     loadEntries();
-  }, [onlyFavorites]);
+  }, []);
 
   const onRefresh = () => {
     setRefreshing(true);
     loadEntries();
   };
+
+  const toggleFavorite = async (entry: JournalEntryResponse) => {
+    const nextVal = !entry.isFavorite;
+    // Optimistic update
+    setEntries((prev) =>
+      prev.map((e) => (e.id === entry.id ? { ...e, isFavorite: nextVal } : e))
+    );
+    try {
+      await api.updateEntry(entry.id, {
+        isFavorite: nextVal,
+        baseRevision: entry.revision,
+      });
+    } catch {
+      // Ignore offline rollback in demo mode
+    }
+  };
+
+  // Filter entries
+  const filteredEntries = entries.filter((e) => {
+    if (activeFilter === "voice") {
+      return (e.audioNotes && e.audioNotes.length > 0);
+    }
+    if (activeFilter === "photo") {
+      return (e.photos && e.photos.length > 0);
+    }
+    return true;
+  });
+
+  // Generate 7-day weekly scrubber track
+  const daysTrack = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    const dayLabel = ["S", "M", "T", "W", "T", "F", "S"][d.getDay()];
+    const dateNum = d.getDate();
+    const isToday = i === 6;
+    const isSelected = selectedDayOffset === 6 - i;
+    return { offset: 6 - i, dayLabel, dateNum, isToday, isSelected };
+  });
 
   return (
     <ScrollView
@@ -95,167 +128,331 @@ export default function TimelineScreen() {
         />
       }
     >
-      {/* Top Filter Bar */}
-      <View style={styles.filterRow}>
-        <View style={styles.countBadge}>
-          <Text style={styles.countText}>
-            {entries.length} {entries.length === 1 ? "MEMORY" : "MEMORIES"}
+      {/* Top Utility Sub-Header & Telemetry */}
+      <View style={styles.topTelemetryRow}>
+        <View style={styles.telemetryLeft}>
+          <View style={styles.indexBadge}>
+            <View style={styles.cyanGlowDot} />
+            <Text style={styles.indexBadgeText}>INDEX 04</Text>
+          </View>
+          <Text style={styles.monthLabel}>
+            {new Date().toLocaleDateString("en-US", { month: "short", year: "numeric" }).toUpperCase()}
           </Text>
         </View>
 
+        {/* 32 Day Streak Badge */}
+        <View style={styles.streakBadge}>
+          <Ionicons name="flame" size={14} color={THEME.colors.rose} />
+          <Text style={styles.streakText}>32D STREAK</Text>
+        </View>
+      </View>
+
+      {/* Horizontal Weekly Scrubber Track */}
+      <View style={styles.scrubberSection}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.scrubberRow}
+        >
+          {daysTrack.map((item) => (
+            <Pressable
+              key={item.offset}
+              style={[
+                styles.dayButton,
+                item.isSelected && styles.dayButtonSelected,
+              ]}
+              onPress={() => setSelectedDayOffset(item.offset)}
+            >
+              <Text
+                style={[
+                  styles.dayLetter,
+                  item.isSelected && styles.dayLetterSelected,
+                ]}
+              >
+                {item.dayLabel}
+              </Text>
+              <Text
+                style={[
+                  styles.dayNumber,
+                  item.isSelected && styles.dayNumberSelected,
+                ]}
+              >
+                {item.dateNum}
+              </Text>
+              <View style={styles.dotIndicatorRow}>
+                <View
+                  style={[
+                    styles.subDot,
+                    {
+                      backgroundColor: item.isSelected
+                        ? THEME.colors.textInverse
+                        : item.offset === 0
+                        ? THEME.colors.accent
+                        : THEME.colors.cyan,
+                    },
+                  ]}
+                />
+                {item.offset % 2 === 0 && (
+                  <View
+                    style={[
+                      styles.subDot,
+                      {
+                        backgroundColor: item.isSelected
+                          ? THEME.colors.cyan
+                          : THEME.colors.rose,
+                      },
+                    ]}
+                  />
+                )}
+              </View>
+            </Pressable>
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* Filter & Segmented View Track */}
+      <View style={styles.segmentedFilterTrack}>
         <Pressable
           style={[
-            styles.favoriteFilterPill,
-            onlyFavorites && styles.favoriteFilterPillActive,
+            styles.filterSegmentBtn,
+            activeFilter === "all" && styles.filterSegmentBtnActive,
           ]}
-          onPress={() => setOnlyFavorites((p) => !p)}
+          onPress={() => setActiveFilter("all")}
         >
-          <Ionicons
-            name={onlyFavorites ? "heart" : "heart-outline"}
-            size={14}
-            color={onlyFavorites ? THEME.colors.rose : THEME.colors.textSecondary}
-            style={{ marginRight: 5 }}
-          />
           <Text
             style={[
-              styles.favoriteFilterText,
-              onlyFavorites && styles.favoriteFilterTextActive,
+              styles.filterSegmentText,
+              activeFilter === "all" && styles.filterSegmentTextActive,
             ]}
           >
-            Favorites
+            ALL ENTRIES
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[
+            styles.filterSegmentBtn,
+            activeFilter === "voice" && styles.filterSegmentBtnActive,
+          ]}
+          onPress={() => setActiveFilter("voice")}
+        >
+          <Text
+            style={[
+              styles.filterSegmentText,
+              activeFilter === "voice" && styles.filterSegmentTextActive,
+            ]}
+          >
+            VOICE MEMOS
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[
+            styles.filterSegmentBtn,
+            activeFilter === "photo" && styles.filterSegmentBtnActive,
+          ]}
+          onPress={() => setActiveFilter("photo")}
+        >
+          <Text
+            style={[
+              styles.filterSegmentText,
+              activeFilter === "photo" && styles.filterSegmentTextActive,
+            ]}
+          >
+            PHOTO STORIES
           </Text>
         </Pressable>
       </View>
 
+      {/* Feed Header Stream Legend */}
+      <View style={styles.feedHeaderRow}>
+        <Text style={styles.feedLegendLabel}>CHRONOLOGY // ACTIVE LOG</Text>
+        <Text style={styles.feedCountLabel}>
+          {filteredEntries.length} {filteredEntries.length === 1 ? "MEMORY" : "RECENT MEMORIES"}
+        </Text>
+      </View>
+
+      {/* Loading state */}
       {loading ? (
-        <View style={styles.centerContainer}>
+        <View style={styles.centerBox}>
           <ActivityIndicator size="small" color={THEME.colors.accent} />
-          <Text style={styles.loadingText}>Loading timeline...</Text>
+          <Text style={styles.loadingText}>Synchronizing timeline vault...</Text>
         </View>
-      ) : entries.length === 0 ? (
+      ) : filteredEntries.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Ionicons name="journal-outline" size={38} color={THEME.colors.textTertiary} />
-          <Text style={styles.emptyTitle}>No memories found</Text>
+          <Ionicons name="journal-outline" size={36} color={THEME.colors.textTertiary} />
+          <Text style={styles.emptyTitle}>No archival records</Text>
           <Text style={styles.emptySubtitle}>
-            {onlyFavorites
-              ? "No favorite entries yet. Star an entry to save it here."
+            {activeFilter === "voice"
+              ? "No acoustic voice recordings found."
+              : activeFilter === "photo"
+              ? "No photographic memories captured yet."
               : "Capture your first reflection in the Today tab!"}
           </Text>
         </View>
       ) : (
-        entries.map((item) => {
-          const moodDef = THEME_MOODS.find((m) => m.level === item.mood);
-          const isExpanded = selectedEntryId === item.id;
+        /* Feed Cards Stream */
+        <View style={styles.feedList}>
+          {filteredEntries.map((item) => {
+            const moodDef = THEME_MOODS.find((m) => m.level === item.mood);
+            const hasAudio = item.audioNotes && item.audioNotes.length > 0;
+            const hasPhotos = item.photos && item.photos.length > 0;
+            const isPlaying = playingAudioId === item.id;
 
-          return (
-            <Pressable
-              key={item.id}
-              style={[styles.card, isExpanded && styles.cardExpanded]}
-              onPress={() => setSelectedEntryId(isExpanded ? null : item.id)}
-            >
-              <View style={styles.cardHeader}>
-                <View style={styles.cardHeaderLeft}>
-                  <Text style={styles.dateLabel}>{formatDisplayDate(item.entryDate)}</Text>
-                  {item.title ? (
-                    <Text style={styles.titleText}>{item.title}</Text>
-                  ) : null}
-                </View>
-
-                <View style={styles.badgeRow}>
-                  {item.isFavorite && (
-                    <Ionicons
-                      name="heart"
-                      size={16}
-                      color={THEME.colors.rose}
-                      style={{ marginRight: 6 }}
-                    />
-                  )}
-                  {moodDef && (
-                    <View
-                      style={[
-                        styles.moodBadge,
-                        { borderColor: moodDef.accentColor, backgroundColor: THEME.colors.surfaceSubtle },
-                      ]}
-                    >
-                      <Ionicons
-                        name={moodDef.iconFilled}
-                        size={13}
-                        color={moodDef.accentColor}
-                      />
-                      <Text style={[styles.moodLabel, { color: moodDef.accentColor }]}>
-                        {moodDef.label}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              </View>
-
-              <Text
-                style={styles.snippetText}
-                numberOfLines={isExpanded ? undefined : 3}
-              >
-                {item.body}
-              </Text>
-
-              {/* Reflection Sections (shown when expanded) */}
-              {isExpanded && item.sections.length > 0 && (
-                <View style={styles.expandedSections}>
-                  {item.sections.map((sec) => (
-                    <View key={sec.id} style={styles.sectionRow}>
-                      <View style={styles.sectionHeaderLine}>
+            return (
+              <View key={item.id} style={styles.card}>
+                {/* Card Meta Top Row */}
+                <View style={styles.cardMetaRow}>
+                  <View style={styles.metaLeftGroup}>
+                    {moodDef && (
+                      <View style={styles.moodChip}>
                         <Ionicons
-                          name={
-                            sec.sectionType === "highlights"
-                              ? "ribbon-outline"
-                              : sec.sectionType === "gratitude"
-                              ? "gift-outline"
-                              : sec.sectionType === "learned"
-                              ? "bulb-outline"
-                              : "flag-outline"
-                          }
+                          name={moodDef.iconFilled}
                           size={14}
-                          color={
-                            sec.sectionType === "highlights"
-                              ? THEME.colors.amber
-                              : sec.sectionType === "gratitude"
-                              ? THEME.colors.rose
-                              : sec.sectionType === "learned"
-                              ? THEME.colors.emerald
-                              : THEME.colors.sky
-                          }
+                          color={moodDef.accentColor}
                         />
-                        <Text style={styles.sectionHeading}>
-                          {sec.sectionType === "highlights"
-                            ? "Highlights"
-                            : sec.sectionType === "gratitude"
-                            ? "Gratitude"
-                            : sec.sectionType === "learned"
-                            ? "Lessons"
-                            : sec.sectionType === "tomorrow"
-                            ? "Tomorrow"
-                            : "Section"}
+                        <Text
+                          style={[
+                            styles.moodChipText,
+                            { color: moodDef.accentColor },
+                          ]}
+                        >
+                          {moodDef.label.toUpperCase()}
                         </Text>
                       </View>
-                      <Text style={styles.sectionContent}>{sec.content}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
+                    )}
+                    <Text style={styles.cardDateText}>
+                      {new Date(item.entryDate).toLocaleDateString("en-US", {
+                        weekday: "short",
+                        month: "short",
+                        day: "numeric",
+                      }).toUpperCase()}
+                    </Text>
+                  </View>
 
-              {/* Tags */}
-              {item.tags.length > 0 && (
-                <View style={styles.tagsRow}>
-                  {item.tags.map((t) => (
-                    <View key={t} style={styles.tagBadge}>
-                      <Text style={styles.tagText}>#{t}</Text>
-                    </View>
-                  ))}
+                  <View style={styles.metaRightGroup}>
+                    <Text style={styles.timeText}>
+                      {new Date(item.createdAt).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </Text>
+                    <Pressable
+                      style={styles.starBtn}
+                      onPress={() => toggleFavorite(item)}
+                      hitSlop={8}
+                    >
+                      <Ionicons
+                        name={item.isFavorite ? "star" : "star-outline"}
+                        size={17}
+                        color={item.isFavorite ? THEME.colors.accent : THEME.colors.textTertiary}
+                      />
+                    </Pressable>
+                  </View>
                 </View>
-              )}
-            </Pressable>
-          );
-        })
+
+                {/* Title & Body Text */}
+                <View style={styles.cardBodySection}>
+                  {item.title ? (
+                    <Text style={styles.cardTitle}>{item.title}</Text>
+                  ) : null}
+                  <Text style={styles.cardBodyText} numberOfLines={3}>
+                    {item.body}
+                  </Text>
+                </View>
+
+                {/* Audio Acoustic Bar Module */}
+                {hasAudio && (
+                  <View style={styles.audioAcousticModule}>
+                    <View style={styles.audioLeftInfo}>
+                      <Pressable
+                        style={[
+                          styles.audioPlayCircle,
+                          isPlaying && styles.audioPlayCircleActive,
+                        ]}
+                        onPress={() =>
+                          setPlayingAudioId(isPlaying ? null : item.id)
+                        }
+                      >
+                        <Ionicons
+                          name={isPlaying ? "pause" : "play"}
+                          size={16}
+                          color={isPlaying ? THEME.colors.textInverse : THEME.colors.cyan}
+                        />
+                      </Pressable>
+                      <View style={styles.audioLabelGroup}>
+                        <Text style={styles.audioSubLabel}>VOICE CAPTURE</Text>
+                        <Text style={styles.audioDurationText}>
+                          {item.audioNotes![0].durationSeconds
+                            ? `0${Math.floor(item.audioNotes![0].durationSeconds / 60)}:${(item.audioNotes![0].durationSeconds % 60).toString().padStart(2, "0")}`
+                            : "01:42"}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Machined Sound-Wave Graphic (Acoustic Sky) */}
+                    <View style={styles.waveformGraphic}>
+                      {[8, 12, 20, 14, 18, 24, 20, 10, 16, 22, 12, 8, 4].map(
+                        (h, idx) => (
+                          <View
+                            key={idx}
+                            style={[
+                              styles.soundBar,
+                              {
+                                height: isPlaying ? ((idx % 3 + 1) * 7) : h,
+                                backgroundColor:
+                                  idx < 9
+                                    ? THEME.colors.cyan
+                                    : THEME.colors.border,
+                              },
+                            ]}
+                          />
+                        )
+                      )}
+                    </View>
+                  </View>
+                )}
+
+                {/* Photo Previews Bento */}
+                {hasPhotos && (
+                  <View style={styles.photoGridPreview}>
+                    {item.photos!.slice(0, 2).map((photo, pIdx) => (
+                      <Pressable
+                        key={photo.id || pIdx}
+                        style={styles.photoThumbItem}
+                        onPress={() => {
+                          setLightboxPhotos(item.photos!);
+                          setLightboxIndex(pIdx);
+                          setLightboxVisible(true);
+                        }}
+                      >
+                        <Image
+                          source={{ uri: photo.url }}
+                          style={styles.photoThumbImage}
+                          resizeMode="cover"
+                        />
+                        <View style={styles.photoTagOverlay}>
+                          <Text style={styles.photoTagText} numberOfLines={1}>
+                            {photo.caption
+                              ? photo.caption.slice(0, 14).toUpperCase()
+                              : `FRAME_0${pIdx + 1}`}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+              </View>
+            );
+          })}
+        </View>
       )}
+
+      {/* Lightbox Modal */}
+      <PhotoLightboxModal
+        visible={lightboxVisible}
+        photos={lightboxPhotos}
+        initialIndex={lightboxIndex}
+        onClose={() => setLightboxVisible(false)}
+      />
     </ScrollView>
   );
 }
@@ -266,184 +463,369 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.colors.background,
   },
   contentContainer: {
-    padding: THEME.spacing.lg,
-    paddingBottom: 50,
-    maxWidth: 740,
-    width: "100%",
-    alignSelf: "center",
+    paddingHorizontal: THEME.spacing.gutter,
+    paddingTop: 12,
+    paddingBottom: 48,
   },
-  filterRow: {
+  topTelemetryRow: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: THEME.spacing.md,
+    marginBottom: 16,
   },
-  countBadge: {
-    backgroundColor: THEME.colors.surface,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: THEME.radius.full,
-    borderWidth: 1,
-    borderColor: THEME.colors.border,
-  },
-  countText: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: THEME.colors.textTertiary,
-    letterSpacing: 1.1,
-  },
-  favoriteFilterPill: {
+  telemetryLeft: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: THEME.radius.full,
-    backgroundColor: THEME.colors.surface,
-    borderWidth: 1,
-    borderColor: THEME.colors.border,
-  },
-  favoriteFilterPillActive: {
-    backgroundColor: THEME.colors.roseMuted,
-    borderColor: "rgba(244, 63, 94, 0.35)",
-  },
-  favoriteFilterText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: THEME.colors.textSecondary,
-  },
-  favoriteFilterTextActive: {
-    color: THEME.colors.rose,
-  },
-  centerContainer: {
-    paddingVertical: 60,
-    alignItems: "center",
-    gap: 12,
-  },
-  loadingText: {
-    fontSize: 13,
-    color: THEME.colors.textSecondary,
-  },
-  emptyContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 80,
     gap: 10,
   },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: THEME.colors.textPrimary,
-  },
-  emptySubtitle: {
-    fontSize: 13,
-    color: THEME.colors.textSecondary,
-    textAlign: "center",
-    maxWidth: 320,
-    lineHeight: 18,
-  },
-  card: {
-    backgroundColor: THEME.colors.surface,
-    borderRadius: THEME.radius.lg,
-    padding: THEME.spacing.lg,
-    marginBottom: THEME.spacing.md,
+  indexBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: THEME.radius.sm,
+    backgroundColor: THEME.colors.surfaceContainerHigh,
     borderWidth: 1,
     borderColor: THEME.colors.border,
   },
-  cardExpanded: {
-    borderColor: THEME.colors.accentBorder,
+  cyanGlowDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: THEME.colors.cyan,
   },
-  cardHeader: {
+  indexBadgeText: {
+    fontFamily: THEME.typography.mono,
+    fontSize: 10,
+    fontWeight: "600",
+    color: THEME.colors.cyan,
+    letterSpacing: 0.8,
+  },
+  monthLabel: {
+    fontFamily: THEME.typography.mono,
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
+    letterSpacing: 0.5,
+  },
+  streakBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: THEME.radius.sm,
+    backgroundColor: THEME.colors.surfaceContainerHigh,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+  },
+  streakText: {
+    fontFamily: THEME.typography.mono,
+    fontSize: 11,
+    fontWeight: "600",
+    color: THEME.colors.rose,
+    letterSpacing: 0.5,
+  },
+  scrubberSection: {
+    marginBottom: 16,
+  },
+  scrubberRow: {
+    flexDirection: "row",
+    gap: 8,
+    paddingVertical: 4,
+  },
+  dayButton: {
+    width: 44,
+    height: 64,
+    borderRadius: THEME.radius.md,
+    backgroundColor: THEME.colors.surfaceContainerLow,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 8,
+  },
+  dayButtonSelected: {
+    backgroundColor: THEME.colors.accent,
+    borderColor: THEME.colors.accent,
+    transform: [{ translateY: -2 }],
+  },
+  dayLetter: {
+    fontFamily: THEME.typography.mono,
+    fontSize: 10,
+    fontWeight: "600",
+    color: THEME.colors.textTertiary,
+  },
+  dayLetterSelected: {
+    color: THEME.colors.textInverse,
+    opacity: 0.9,
+  },
+  dayNumber: {
+    fontFamily: THEME.typography.title,
+    fontSize: 16,
+    fontWeight: "600",
+    color: THEME.colors.textPrimary,
+  },
+  dayNumberSelected: {
+    color: THEME.colors.textInverse,
+  },
+  dotIndicatorRow: {
+    flexDirection: "row",
+    gap: 3,
+    height: 4,
+    alignItems: "center",
+  },
+  subDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+  },
+  segmentedFilterTrack: {
+    flexDirection: "row",
+    backgroundColor: THEME.colors.surfaceContainerLowest,
+    padding: 3,
+    borderRadius: THEME.radius.md,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    gap: 4,
+  },
+  filterSegmentBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: THEME.radius.sm,
+  },
+  filterSegmentBtnActive: {
+    backgroundColor: THEME.colors.surfaceContainerHigh,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  filterSegmentText: {
+    fontFamily: THEME.typography.mono,
+    fontSize: 10,
+    fontWeight: "600",
+    color: THEME.colors.textTertiary,
+    letterSpacing: 0.8,
+  },
+  filterSegmentTextActive: {
+    color: THEME.colors.textPrimary,
+  },
+  feedHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+    paddingHorizontal: 2,
+  },
+  feedLegendLabel: {
+    fontFamily: THEME.typography.mono,
+    fontSize: 10,
+    fontWeight: "600",
+    color: THEME.colors.textTertiary,
+    letterSpacing: 0.8,
+  },
+  feedCountLabel: {
+    fontFamily: THEME.typography.mono,
+    fontSize: 11,
+    color: THEME.colors.textSecondary,
+  },
+  centerBox: {
+    paddingVertical: 48,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingText: {
+    fontFamily: THEME.typography.mono,
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
+    marginTop: 8,
+  },
+  emptyContainer: {
+    paddingVertical: 48,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyTitle: {
+    fontFamily: THEME.typography.title,
+    fontSize: 16,
+    fontWeight: "600",
+    color: THEME.colors.textPrimary,
+    marginTop: 10,
+  },
+  emptySubtitle: {
+    fontFamily: THEME.typography.body,
+    fontSize: 13,
+    color: THEME.colors.textTertiary,
+    marginTop: 4,
+    textAlign: "center",
+    maxWidth: 240,
+  },
+  feedList: {
+    gap: 14,
+  },
+  card: {
+    backgroundColor: THEME.colors.surfaceContainer,
+    borderRadius: THEME.radius.xl,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    gap: 12,
+  },
+  cardMetaRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 10,
+    alignItems: "center",
   },
-  cardHeaderLeft: {
-    flex: 1,
-    marginRight: 10,
+  metaLeftGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
-  dateLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: THEME.colors.textTertiary,
+  moodChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: THEME.radius.sm,
+    backgroundColor: THEME.colors.surfaceContainerHighest,
+  },
+  moodChipText: {
+    fontFamily: THEME.typography.mono,
+    fontSize: 10,
+    fontWeight: "600",
     letterSpacing: 0.5,
-    marginBottom: 4,
   },
-  titleText: {
+  cardDateText: {
+    fontFamily: THEME.typography.mono,
+    fontSize: 11,
+    color: THEME.colors.textSecondary,
+  },
+  metaRightGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  timeText: {
+    fontFamily: THEME.typography.mono,
+    fontSize: 11,
+    color: THEME.colors.textTertiary,
+  },
+  starBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: THEME.colors.surfaceContainerHigh,
+  },
+  cardBodySection: {
+    gap: 4,
+  },
+  cardTitle: {
+    fontFamily: THEME.typography.title,
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "600",
     color: THEME.colors.textPrimary,
     letterSpacing: -0.2,
   },
-  badgeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  moodBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: THEME.radius.full,
-    borderWidth: 1,
-  },
-  moodLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  snippetText: {
-    fontSize: 14,
-    lineHeight: 21,
+  cardBodyText: {
+    fontFamily: THEME.typography.body,
+    fontSize: 13,
     color: THEME.colors.textSecondary,
+    lineHeight: 19,
   },
-  expandedSections: {
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: THEME.colors.borderSubtle,
+  audioAcousticModule: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: THEME.radius.md,
+    backgroundColor: THEME.colors.surfaceContainerLow,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+  },
+  audioLeftInfo: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
-  sectionRow: {
-    backgroundColor: THEME.colors.surfaceSubtle,
-    borderRadius: THEME.radius.md,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: THEME.colors.borderSubtle,
-  },
-  sectionHeaderLine: {
-    flexDirection: "row",
+  audioPlayCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: THEME.colors.surfaceContainerHighest,
     alignItems: "center",
-    gap: 6,
-    marginBottom: 4,
+    justifyContent: "center",
   },
-  sectionHeading: {
-    fontSize: 11,
-    fontWeight: "700",
+  audioPlayCircleActive: {
+    backgroundColor: THEME.colors.cyan,
+  },
+  audioLabelGroup: {
+    gap: 1,
+  },
+  audioSubLabel: {
+    fontFamily: THEME.typography.mono,
+    fontSize: 9,
+    fontWeight: "600",
+    color: THEME.colors.textTertiary,
+    letterSpacing: 0.8,
+  },
+  audioDurationText: {
+    fontFamily: THEME.typography.mono,
+    fontSize: 12,
+    fontWeight: "600",
     color: THEME.colors.textPrimary,
   },
-  sectionContent: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: THEME.colors.textSecondary,
-  },
-  tagsRow: {
+  waveformGraphic: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-    marginTop: 12,
+    alignItems: "center",
+    gap: 2.5,
+    height: 24,
+    paddingHorizontal: 4,
   },
-  tagBadge: {
-    backgroundColor: THEME.colors.surfaceSubtle,
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: THEME.radius.full,
+  soundBar: {
+    width: 2.5,
+    borderRadius: 1,
+  },
+  photoGridPreview: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  photoThumbItem: {
+    flex: 1,
+    height: 100,
+    borderRadius: THEME.radius.lg,
+    overflow: "hidden",
+    backgroundColor: THEME.colors.surfaceContainerLowest,
+    position: "relative",
     borderWidth: 1,
-    borderColor: THEME.colors.borderSubtle,
+    borderColor: THEME.colors.border,
   },
-  tagText: {
-    fontSize: 11,
-    color: THEME.colors.textTertiary,
-    fontWeight: "500",
+  photoThumbImage: {
+    width: "100%",
+    height: "100%",
+  },
+  photoTagOverlay: {
+    position: "absolute",
+    bottom: 6,
+    left: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: THEME.radius.sm,
+    backgroundColor: "rgba(17, 19, 26, 0.85)",
+  },
+  photoTagText: {
+    fontFamily: THEME.typography.mono,
+    fontSize: 9,
+    fontWeight: "600",
+    color: THEME.colors.textPrimary,
+    letterSpacing: 0.5,
   },
 });

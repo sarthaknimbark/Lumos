@@ -4,14 +4,21 @@
  * Zero colored emojis — all UI indicators use theme-matched outline / filled vector icons.
  */
 
+import { Platform } from "react-native";
+
 export const THEME = {
   colors: {
     // Canvas & Surfaces
     background: "#11131a", // Stitch deep matte slate
     surface: "#191b23", // Elevated card surface (container low)
     surfaceSubtle: "#1d1f27", // Secondary container
+    surfaceContainerLow: "#191b23",
+    surfaceContainer: "#1d1f27",
     surfaceContainerHigh: "#282a31", // High elevation
+    surfaceContainerHighest: "#33343c",
+    surfaceContainerLowest: "#0c0e15",
     surfaceHover: "#33343c", // Hover / press state
+    surfaceVariant: "#33343c",
 
     // Borders & Separators
     border: "rgba(255, 255, 255, 0.08)", // Crisp hairline border
@@ -40,6 +47,8 @@ export const THEME = {
     roseMuted: "rgba(244, 63, 94, 0.12)",
     sky: "#7bd0ff",
     skyMuted: "rgba(123, 208, 255, 0.12)",
+    cyan: "#7bd0ff",
+    cyanMuted: "rgba(123, 208, 255, 0.12)",
     purple: "#a855f7",
     purpleMuted: "rgba(168, 85, 247, 0.12)",
   },
@@ -60,6 +69,13 @@ export const THEME = {
     xl: 20,
     xxl: 24,
     xxxl: 32,
+    gutter: 16,
+  },
+
+  typography: {
+    body: Platform.select({ ios: "System", android: "Roboto", default: "Inter, -apple-system, sans-serif" }),
+    title: Platform.select({ ios: "System", android: "Roboto", default: "Space Grotesk, -apple-system, sans-serif" }),
+    mono: Platform.select({ ios: "Courier", android: "monospace", default: "JetBrains Mono, monospace" }),
   },
 } as const;
 

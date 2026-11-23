@@ -73,14 +73,34 @@ Current status: Phase 8 complete. Ready for Phase 9 (Export/import, security, te
   - Implemented strictly read-only calendar service requesting only `calendar.events.readonly` with zero event modification permissions.
   - Added routes under `/api/v1/integrations/calendar/*` with token encryption and simulated context for local dev.
   - Added Day Schedule Context card in the Today tab and connection settings card.
-- Stitch Luxury UI Redesign & Dual-Mode Media Architecture:
-  - Redesigned Today reflection canvas in `apps/client/app/(tabs)/index.tsx` based on the Stitch luxury design export.
-  - Added **Dual-Mode Switcher**: Clean segmented toggle between `[ Type Reflection ]` and `[ Record Note ]`.
-  - Added **Raw Audio Recording Studio & Acoustic Player**: Oscillating sound-wave bars, elapsed timer, play/pause controls, speed toggle (`1.2x`), strictly zero speech-to-text transcription to preserve voice privacy.
-  - Added **Visual Captures Bento Grid**: 2-column photo grid with `+ Add Picture` (real web file upload & preview), remove buttons (`✕`), and timestamped captions.
-  - Integrated Stitch design tokens in `apps/client/src/theme/index.ts` (`#11131a` canvas, `#191b23` / `#1d1f27` container surfaces, `#c0c1ff` iris accent, `#b50036` recording rose).
-  - Added `AudioNoteAttachmentSchema` and `PhotoAttachmentSchema` to `@myday/contracts` and persisted in `entryService.ts`.
-  - Verified 100% clean TypeScript typechecks across all 5 workspace projects, 23/23 API tests passing, and 10/10 static web routes cleanly exported in 1.07 MB.
+- Stitch Luxury UI Recreation & Sovereign Media Architecture (from `D:\meethaq\stitch_myday_luxury_journal`):
+  - **Screen 1: Today Reflection Canvas** (`apps/client/app/(tabs)/index.tsx`):
+    - Recreated temporal live-log header (`LIVE LOG` + `SESSION #0842`), segmented date navigator, and **Dual-Mode Switcher** (`[ Type Reflection ]` vs `[ Record Note ]`).
+    - Live acoustic note recorder with active recording LED, elapsed counter (`00:00.0`), and waveform player card.
+    - **Strict Voice Privacy Rule Verified**: Direct audio recordings saved as raw sovereign files only (`.m4a`/`.webm`/`.wav`) for waveform playback. Strictly zero speech-to-text transcription.
+    - Visual Captures 2-column bento grid with `+ Add Picture` (HTML5 FileReader on web), photo thumbnails, captions, removal `✕`, and tap-to-open lightbox viewer.
+  - **Screen 2: Timeline Stream & Memory Feed** (`apps/client/app/(tabs)/timeline.tsx`):
+    - Recreated from `timeline_memories_myday/code.html` with `INDEX 04` telemetry header, `32D STREAK` badge, horizontal weekly scrubber track (M 18 to S 24 with dot activity indicators), and 3-way filter segments (`ALL ENTRIES` | `VOICE MEMOS` | `PHOTO STORIES`).
+    - Memory feed cards displaying outline mood vectors, formatted timestamps, favorite stars, inline acoustic waveform players with play/pause, and photo previews.
+  - **Screen 3: Spotlight Search & Media Filter** (`apps/client/app/(tabs)/search.tsx`):
+    - Recreated from `search_filter_myday/code.html` with spotlight search bar, syntax tips (`harbour`, `#architecture`), and live indexed count badge.
+    - Filter chips carousel (`All`, `Voice Notes`, `Photos`, `Favorites`, `Mood ≥ 4`, `Tags`) with live count bubbles.
+    - Tactile 2-segment control for List view vs. Grid view.
+    - Result cards with mini spectral cadence visualizers, photo-excerpt combo cards with `RAW` badges, and discovered taxonomy cards.
+  - **Screen 4: Settings & Local Cache Allocation** (`apps/client/app/(tabs)/settings.tsx`):
+    - Recreated from `settings_storage_myday/code.html` with user identity card, `ED25519` key badge, and zero-knowledge AES-GCM-256 local-first security banner.
+    - Vault Synchronization card with Google Drive AppData telemetry, 3-column stats strip, and `Sync on Wi-Fi Only` toggle.
+    - Media storage breakdown bar displaying text, audio, and photo proportions, with `Optimize Audio Files (AAC-HE)` tool.
+    - Sovereign archives export (Raw JSON, Markdown + Media bundle) and import validation modal.
+    - Critical partition controls: Clear Local Audio Cache and irreversible Data Wipe with confirmation dialogs.
+  - **Screen 5: Photo Lightbox & Archival Instrument Panel** (`apps/client/src/components/PhotoLightboxModal.tsx`):
+    - Recreated from `photo_lightbox_myday/code.html` with edge-to-edge photo viewer, frame indicator (`2 of 4`), optical telemetry strip (`4032 × 3024 12.2 MP`, `28mm ƒ/1.8`, `RAW JPEG`), and editable field log caption box.
+  - **Design Language**:
+    - Strictly ZERO colored emojis. 2px minimalist monochrome line vector icons (Ionicons) that highlight with theme accents (`#c0c1ff` Iris, `#7bd0ff` Acoustic Sky, `#ffb2b7` Studio Rose, `#fbbf24` Amber).
+  - **Verification**:
+    - `pnpm typecheck`: Passed with **0 errors** across all 5 workspace projects.
+    - `pnpm test`: **23/23 API tests passed**.
+    - Universal web bundling: **10/10 static web routes cleanly exported in 1.11 MB**.
 
 ## Manual Configuration Needed for Live Auth
 

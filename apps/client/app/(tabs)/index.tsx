@@ -21,6 +21,7 @@ import { THEME } from "../../src/theme";
 import { MoodSelector } from "../../src/components/MoodSelector";
 import { EnergySelector } from "../../src/components/EnergySelector";
 import { TagPill } from "../../src/components/TagPill";
+import { PhotoLightboxModal } from "../../src/components/PhotoLightboxModal";
 import {
   AudioNoteAttachment,
   CalendarEventItem,
@@ -103,6 +104,10 @@ export default function TodayScreen() {
       createdAt: new Date().toISOString(),
     },
   ]);
+
+  // Lightbox State
+  const [lightboxVisible, setLightboxVisible] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
 
   // Audio Recorder & Player State
   const [isRecording, setIsRecording] = useState(false);
@@ -806,12 +811,22 @@ export default function TodayScreen() {
                 </Pressable>
 
                 {/* Photo Previews */}
-                {photos.map((item) => (
-                  <View key={item.id} style={styles.photoThumbnailCard}>
+                {photos.map((item, pIdx) => (
+                  <Pressable
+                    key={item.id}
+                    style={styles.photoThumbnailCard}
+                    onPress={() => {
+                      setLightboxIndex(pIdx);
+                      setLightboxVisible(true);
+                    }}
+                  >
                     <Image source={{ uri: item.url }} style={styles.photoImage} />
                     <Pressable
                       style={styles.removePhotoBtn}
-                      onPress={() => handleRemovePicture(item.id)}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleRemovePicture(item.id);
+                      }}
                     >
                       <Ionicons name="close" size={14} color="#ffffff" />
                     </Pressable>
@@ -821,7 +836,7 @@ export default function TodayScreen() {
                         {item.caption || item.filename}
                       </Text>
                     </View>
-                  </View>
+                  </Pressable>
                 ))}
               </View>
             </View>
@@ -1022,6 +1037,14 @@ export default function TodayScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Lightbox Modal */}
+      <PhotoLightboxModal
+        visible={lightboxVisible}
+        photos={photos}
+        initialIndex={lightboxIndex}
+        onClose={() => setLightboxVisible(false)}
+      />
     </KeyboardAvoidingView>
   );
 }

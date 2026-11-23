@@ -75,13 +75,13 @@ export default function TabLayout() {
       <Tabs.Screen
         name="timeline"
         options={{
-          title: "Timeline",
-          headerTitle: "Timeline",
+          title: "Stream",
+          headerTitle: "Timeline Stream",
           tabBarIcon: ({ focused }) => (
             <TabIcon
               focused={focused}
-              outlineName="calendar-outline"
-              filledName="calendar"
+              outlineName="time-outline"
+              filledName="time"
             />
           ),
         }}
@@ -90,7 +90,7 @@ export default function TabLayout() {
         name="search"
         options={{
           title: "Search",
-          headerTitle: "Search",
+          headerTitle: "Vault Search",
           tabBarIcon: ({ focused }) => (
             <TabIcon
               focused={focused}
@@ -103,13 +103,13 @@ export default function TabLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          title: "Settings",
-          headerTitle: "Settings",
+          title: "Vault",
+          headerTitle: "Vault Storage & Settings",
           tabBarIcon: ({ focused }) => (
             <TabIcon
               focused={focused}
-              outlineName="settings-outline"
-              filledName="settings"
+              outlineName="shield-checkmark-outline"
+              filledName="shield-checkmark"
             />
           ),
         }}
