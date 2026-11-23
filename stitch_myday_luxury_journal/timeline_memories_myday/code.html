@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_tab" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { colors: { "surface": "#11131a", "primary-fixed-dim": "#c0c1ff", "tertiary-container": "#009bd1", "on-tertiary-container": "#002d40", "primary-fixed": "#e1e0ff", "secondary": "#ffb2b7", "on-error": "#690005", "on-secondary-fixed": "#40000d", "inverse-primary": "#494bd6", "surface-variant": "#33343c", "on-tertiary": "#00354a", "on-primary-fixed-variant": "#2f2ebe", "secondary-container": "#b50036", "on-surface-variant": "#c7c4d7", "primary-container": "#8083ff", "on-error-container": "#ffdad6", "surface-bright": "#373941", "on-secondary-container": "#ffc2c4", "on-background": "#e2e2ec", "inverse-surface": "#e2e2ec", "surface-container-highest": "#33343c", "secondary-fixed-dim": "#ffb2b7", "background": "#11131a", "on-primary-fixed": "#07006c", "tertiary-fixed": "#c4e7ff", "tertiary": "#7bd0ff", "outline": "#908fa0", "on-secondary": "#67001b", "outline-variant": "#464554", "inverse-on-surface": "#2e3038", "on-secondary-fixed-variant": "#92002a", "primary": "#c0c1ff", "secondary-fixed": "#ffdadb", "surface-container-low": "#191b23", "on-tertiary-fixed": "#001e2c", "surface-dim": "#11131a", "surface-container": "#1d1f27", "surface-tint": "#c0c1ff", "error": "#ffb4ab", "on-primary-container": "#0d0096", "on-tertiary-fixed-variant": "#004c69", "on-primary": "#1000a9", "error-container": "#93000a", "surface-container-lowest": "#0c0e15", "surface-container-high": "#282a31", "tertiary-fixed-dim": "#7bd0ff", "on-surface": "#e2e2ec" }, borderRadius: { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" }, spacing: { "gutter": "1rem", "margin-lg": "3.5rem", "space-md": "1rem", "space-xs": "0.25rem", "space-lg": "1.5rem", "space-sm": "0.5rem", "margin": "1rem", "gutter-lg": "2rem", "margin-md": "2rem", "gutter-md": "1.5rem", "space-xl": "2.5rem" }, fontFamily: { "body-sm": ["Inter"], "label-caps": ["JetBrains Mono"], "title-sm": ["Space Grotesk"], "headline-lg-mobile": ["Space Grotesk"], "headline-lg": ["Space Grotesk"], "display-lg-mobile": ["Space Grotesk"], "mono-sm": ["JetBrains Mono"], "mono-lg": ["JetBrains Mono"], "display-lg": ["Space Grotesk"], "body-lg": ["Inter"], "headline-md": ["Space Grotesk"], "body-md": ["Inter"] }, fontSize: { "body-sm": ["13px", { "lineHeight": "18px", "letterSpacing": "0em", "fontWeight": "400" }], "label-caps": ["10px", { "lineHeight": "12px", "letterSpacing": "0.08em", "fontWeight": "600" }], "title-sm": ["16px", { "lineHeight": "22px", "letterSpacing": "-0.01em", "fontWeight": "500" }], "headline-lg-mobile": ["24px", { "lineHeight": "30px", "letterSpacing": "-0.015em", "fontWeight": "500" }], "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "500" }], "display-lg-mobile": ["32px", { "lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "600" }], "mono-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500" }], "mono-lg": ["15px", { "lineHeight": "20px", "letterSpacing": "-0.02em", "fontWeight": "500" }], "display-lg": ["48px", { "lineHeight": "52px", "letterSpacing": "-0.03em", "fontWeight": "600" }], "body-lg": ["17px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "400" }], "headline-md": ["22px", { "lineHeight": "28px", "letterSpacing": "-0.015em", "fontWeight": "500" }], "body-md": ["14px", { "lineHeight": "22px", "letterSpacing": "-0.005em", "fontWeight": "400" }] } } } };</script><style>@layer base { html, body { width: 100%; margin: 0; padding: 0; background-color: #11131a; } .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); } .pt-safe { padding-top: env(safe-area-inset-top, 0px); } main > :first-child { margin-top: 0 !important; } main > :last-child { margin-bottom: 0 !important; } } ::-webkit-scrollbar { display: none; }</style><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head><body class="bg-surface text-on-surface antialiased selection:bg-primary-container selection:text-on-primary-container"><header class="fixed top-0 w-full z-50 pt-safe bg-surface/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="h-16 px-gutter flex items-center justify-between"><div class="flex items-center gap-space-sm"><img alt="MyDay Emblem" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/ALJJyrDx0V1Ti8OcwV8Sg46Eqq3ZeuoLzBYmVbfraqm5IU7oyA4qzDclxTF8jMitsAS_Zu2ynk7F0gh1tK6KUJOE8qeV0NB9LKEKkgjz799mz5MUMkswlPfNx7Phd8dNs0digQwxGW_CiYDghcDHJ3uUeXw6fXFcf8rvUzcWnXfXfTasod3mL9VM2oVeQJICixovUXm8eMn1cv0oAnNEQuA4P_Ulvl_EgYtxG5r2flczd0qMvA"/><div class="flex flex-col"><span class="font-title-sm text-title-sm tracking-tighter text-on-surface uppercase">MyDay</span><span class="font-label-caps text-label-caps uppercase text-outline">Timeline</span></div></div><div class="flex items-center gap-space-sm"><a class="w-11 h-11 flex items-center justify-center rounded-full hover:opacity-80 transition-opacity" data-path="settings" href="#"><img alt="Profile" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuARQV2mhtPJwtOVzLjgpjoV7RzBhs9AJfWAxT3H9vc64Ix0sWMejRkt87PIzjXCKTjmvDCBZJHEI2-V-6A24cBfAEeb7sU5F0kq-w58LK44BE_Opgo68X79bbOoq04a7T6RL5dHw03pGFzh_FA71Av68wKPnlEozJPBWgeI_1bIRrfIzCDl-z34NydOL6bu5UxPKHA4jrR09LsQ5Esi7wZJzsNHCOiMu02WrGQBGiyc"/></a></div></div></header><main class="flex flex-col relative w-full bg-surface pt-16 pb-28"><div class="flex flex-col w-full px-gutter gap-space-lg select-none">
+<!-- Top Utility Sub-Header & Telemetry -->
+<section class="flex items-center justify-between pt-space-xs">
+<div class="flex items-center gap-space-sm">
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded bg-surface-container-high text-on-surface">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary shadow-[0_0_8px_rgba(123,208,255,0.8)]"></span>
+<span class="font-label-caps text-label-caps text-tertiary tracking-wider">INDEX 04</span>
+</div>
+<span class="font-mono-sm text-mono-sm text-outline">NOV 2024</span>
+</div>
+<!-- 32 Day Streak Badge -->
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded bg-surface-container-high shadow-sm">
+<span class="material-symbols-outlined text-[15px] text-secondary" style="font-variation-settings: 'FILL' 1;">local_fire_department</span>
+<span class="font-mono-sm text-mono-sm text-secondary font-medium tracking-tight">32D STREAK</span>
+</div>
+</section>
+<!-- Horizontal Weekly Scrubber Track -->
+<section class="w-full">
+<div class="flex items-center justify-between gap-1.5 overflow-x-auto pb-1.5 -mx-gutter px-gutter">
+<!-- M 18 -->
+<button class="group flex flex-col items-center justify-between w-11 h-16 py-2 rounded bg-surface-container-low hover:bg-surface-container transition-colors" type="button">
+<span class="font-label-caps text-label-caps text-outline group-hover:text-on-surface-variant">M</span>
+<span class="font-title-sm text-title-sm text-on-surface-variant font-medium">18</span>
+<div class="flex items-center gap-0.5 h-1.5">
+<span class="w-1 h-1 rounded-full bg-outline"></span>
+</div>
+</button>
+<!-- T 19 -->
+<button class="group flex flex-col items-center justify-between w-11 h-16 py-2 rounded bg-surface-container-low hover:bg-surface-container transition-colors" type="button">
+<span class="font-label-caps text-label-caps text-outline group-hover:text-on-surface-variant">T</span>
+<span class="font-title-sm text-title-sm text-on-surface-variant font-medium">19</span>
+<div class="flex items-center gap-0.5 h-1.5">
+<span class="w-1 h-1 rounded-full bg-tertiary"></span>
+</div>
+</button>
+<!-- W 20 -->
+<button class="group flex flex-col items-center justify-between w-11 h-16 py-2 rounded bg-surface-container-low hover:bg-surface-container transition-colors" type="button">
+<span class="font-label-caps text-label-caps text-outline group-hover:text-on-surface-variant">W</span>
+<span class="font-title-sm text-title-sm text-on-surface-variant font-medium">20</span>
+<div class="flex items-center gap-0.5 h-1.5">
+<span class="w-1 h-1 rounded-full bg-secondary"></span>
+<span class="w-1 h-1 rounded-full bg-outline"></span>
+</div>
+</button>
+<!-- T 21 -->
+<button class="group flex flex-col items-center justify-between w-11 h-16 py-2 rounded bg-surface-container-low hover:bg-surface-container transition-colors" type="button">
+<span class="font-label-caps text-label-caps text-outline group-hover:text-on-surface-variant">T</span>
+<span class="font-title-sm text-title-sm text-on-surface-variant font-medium">21</span>
+<div class="flex items-center gap-0.5 h-1.5">
+<span class="w-1 h-1 rounded-full bg-tertiary"></span>
+<span class="w-1 h-1 rounded-full bg-primary"></span>
+</div>
+</button>
+<!-- F 22 -->
+<button class="group flex flex-col items-center justify-between w-11 h-16 py-2 rounded bg-surface-container-low hover:bg-surface-container transition-colors" type="button">
+<span class="font-label-caps text-label-caps text-outline group-hover:text-on-surface-variant">F</span>
+<span class="font-title-sm text-title-sm text-on-surface-variant font-medium">22</span>
+<div class="flex items-center gap-0.5 h-1.5">
+<span class="w-1 h-1 rounded-full bg-tertiary"></span>
+</div>
+</button>
+<!-- S 23 (Active Day) -->
+<button class="flex flex-col items-center justify-between w-11 h-16 py-2 rounded bg-primary text-on-primary shadow-md transform -translate-y-0.5" type="button">
+<span class="font-label-caps text-label-caps text-on-primary opacity-80">S</span>
+<span class="font-title-sm text-title-sm text-on-primary font-semibold">23</span>
+<div class="flex items-center gap-0.5 h-1.5">
+<span class="w-1 h-1 rounded-full bg-on-primary"></span>
+<span class="w-1 h-1 rounded-full bg-tertiary-fixed"></span>
+<span class="w-1 h-1 rounded-full bg-secondary-fixed"></span>
+</div>
+</button>
+<!-- S 24 -->
+<button class="group flex flex-col items-center justify-between w-11 h-16 py-2 rounded bg-surface-container-low opacity-60" type="button">
+<span class="font-label-caps text-label-caps text-outline">S</span>
+<span class="font-title-sm text-title-sm text-outline font-medium">24</span>
+<div class="flex items-center gap-0.5 h-1.5">
+<span class="w-1 h-1 rounded-full bg-surface-variant"></span>
+</div>
+</button>
+</div>
+</section>
+<!-- Filter & Segmented View Track -->
+<section class="w-full">
+<div class="flex items-center p-1 rounded bg-surface-container-lowest gap-1">
+<button class="flex-1 py-1.5 px-3 rounded bg-surface-container-high text-on-surface font-label-caps text-label-caps tracking-wider text-center transition-all shadow-sm" id="tab-all" onclick="switchFilter('all')" type="button">
+        ALL ENTRIES
+      </button>
+<button class="flex-1 py-1.5 px-3 rounded text-outline hover:text-on-surface font-label-caps text-label-caps tracking-wider text-center transition-all" id="tab-voice" onclick="switchFilter('voice')" type="button">
+        VOICE MEMOS
+      </button>
+<button class="flex-1 py-1.5 px-3 rounded text-outline hover:text-on-surface font-label-caps text-label-caps tracking-wider text-center transition-all" id="tab-photo" onclick="switchFilter('photo')" type="button">
+        PHOTO STORIES
+      </button>
+</div>
+</section>
+<!-- Feed Header Stream Legend -->
+<div class="flex items-center justify-between px-1">
+<span class="font-label-caps text-label-caps text-outline">CHRONOLOGY // ACTIVE LOG</span>
+<span class="font-mono-sm text-mono-sm text-outline">3 RECENT MEMORIES</span>
+</div>
+<!-- Feed Cards Stream Container -->
+<div class="flex flex-col gap-space-md w-full">
+<!-- CARD 1: Today, Nov 23 -->
+<article class="flex flex-col p-space-md rounded-xl bg-surface-container gap-space-md shadow-md" data-card-type="voice photo">
+<!-- Card Meta Top Row -->
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<!-- Mood: Luminous Sun -->
+<div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-container-highest">
+<span class="material-symbols-outlined text-[16px] text-tertiary" style="font-variation-settings: 'FILL' 1;">wb_sunny</span>
+<span class="font-label-caps text-label-caps text-tertiary">LUMINOUS</span>
+</div>
+<span class="font-mono-sm text-mono-sm text-outline">TODAY, NOV 23</span>
+</div>
+<div class="flex items-center gap-space-sm">
+<span class="font-mono-sm text-mono-sm text-outline">08:14 AM</span>
+<button aria-label="Favorite" class="flex items-center justify-center w-7 h-7 rounded hover:bg-surface-container-high transition-colors" onclick="toggleStar(this)" type="button">
+<span class="material-symbols-outlined text-[18px] text-primary" style="font-variation-settings: 'FILL' 1;">star</span>
+</button>
+</div>
+</div>
+<!-- Title & Text Body -->
+<div class="flex flex-col gap-1">
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface font-medium tracking-tight">Morning Clarity &amp; Coffee Run</h2>
+<p class="font-body-md text-body-md text-on-surface-variant line-clamp-2">
+          Walking past the harbour, cold air clearing yesterday’s haze. Realized we should ship the v2 architecture directly without legacy adapters.
+        </p>
+</div>
+<!-- Multi-Modal Previews: Audio Module & Photo Thumbnails -->
+<div class="flex flex-col gap-space-sm pt-1">
+<!-- Audio Acoustic Bar Module -->
+<div class="flex items-center justify-between px-3 py-2 rounded bg-surface-container-low">
+<div class="flex items-center gap-space-sm">
+<button class="flex items-center justify-center w-8 h-8 rounded bg-surface-container-highest text-tertiary hover:bg-tertiary hover:text-on-tertiary transition-colors" onclick="toggleAudio(this)" type="button">
+<span class="material-symbols-outlined text-[18px]">play_arrow</span>
+</button>
+<div class="flex flex-col">
+<span class="font-label-caps text-label-caps text-outline">VOICE CAPTURE</span>
+<span class="font-mono-sm text-mono-sm text-on-surface font-medium">01:42</span>
+</div>
+</div>
+<!-- Machined Sound-Wave Graphic (Acoustic Sky) -->
+<div class="flex items-center gap-0.5 h-6 px-2">
+<span class="w-[2px] h-2 bg-tertiary rounded-sm"></span>
+<span class="w-[2px] h-3 bg-tertiary rounded-sm"></span>
+<span class="w-[2px] h-5 bg-tertiary rounded-sm"></span>
+<span class="w-[2px] h-3 bg-tertiary rounded-sm"></span>
+<span class="w-[2px] h-4 bg-tertiary rounded-sm"></span>
+<span class="w-[2px] h-6 bg-tertiary rounded-sm"></span>
+<span class="w-[2px] h-5 bg-tertiary rounded-sm"></span>
+<span class="w-[2px] h-2 bg-tertiary rounded-sm"></span>
+<span class="w-[2px] h-4 bg-tertiary rounded-sm"></span>
+<span class="w-[2px] h-5 bg-tertiary rounded-sm"></span>
+<span class="w-[2px] h-3 bg-surface-variant rounded-sm"></span>
+<span class="w-[2px] h-2 bg-surface-variant rounded-sm"></span>
+<span class="w-[2px] h-1 bg-surface-variant rounded-sm"></span>
+</div>
+</div>
+<!-- 2 Photos Micro Grid Preview -->
+<div class="grid grid-cols-2 gap-space-sm w-full">
+<div class="relative w-full h-28 rounded-lg overflow-hidden bg-surface-container-lowest">
+<img class="w-full h-full object-cover" data-alt="A foggy morning waterfront pier in Nordic late autumn, quiet steel blue water, lone espresso cup on a weathered timber bench, cold ambient morning light, minimal composition, moody 35mm film photography." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCUuAMd10PyqbHIluKvwPwhSx_IV0SBZFfvop4mae4EOcJQBHYQFvOFLr05n8G_ynJzzaoKzMBJKdfYwTJSecFImcRtFb5-UjrXyvWEgKLdARm-kOVd3IGStavmHD0rffTGUnt0XFXzjLt4Sc8xVxD6GcADkJPzIZLEjhIF6kp59jNjvKzXrmXNgN0xzf51YyDYMNTi5q0uR_gStEMQ_ivTdd79Yqy8MLjrDzSs_6GT"/>
+<span class="absolute bottom-1.5 left-2 px-1.5 py-0.5 rounded bg-surface-container-lowest/80 backdrop-blur-md font-mono-sm text-mono-sm text-on-surface">HARBOUR_01</span>
+</div>
+<div class="relative w-full h-28 rounded-lg overflow-hidden bg-surface-container-lowest">
+<img class="w-full h-full object-cover" data-alt="Warm interior shot of an artisan espresso counter, steam rising from stainless steel portafilter, low key moody cafe atmosphere, warm ambient tungsten highlights reflecting on dark granite surfaces." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDHoq_6sPlqqyrTv9QazLDssDo3LpzP4gOxEbFjqvvLaFeM36scRae2AVXcFnuVxfM-RwuZ9o30ssg6NJXIC6KFBfOo2CMC3W9mwBPWCXQ9kIwC_-yxOyU64FtdCKrhstAeJycAcrwWS3ny56pLvtyQH0uYOBbeqbH4FXmzslrtxbcz9Np0cEo1NgJNte302YGshD2Fg3ZsHmFzBQqdJPhBx7MhnTC-HF7pCr4ndq5e"/>
+<span class="absolute bottom-1.5 left-2 px-1.5 py-0.5 rounded bg-surface-container-lowest/80 backdrop-blur-md font-mono-sm text-mono-sm text-on-surface">+1 ARCHIVE</span>
+</div>
+</div>
+</div>
+</article>
+<!-- CARD 2: Yesterday, Nov 22 -->
+<article class="flex flex-col p-space-md rounded-xl bg-surface-container gap-space-md shadow-md" data-card-type="voice">
+<!-- Card Meta Top Row -->
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<!-- Mood: Contemplative Circle -->
+<div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-container-highest">
+<span class="material-symbols-outlined text-[16px] text-primary" style="font-variation-settings: 'FILL' 1;">trip_origin</span>
+<span class="font-label-caps text-label-caps text-primary">DEEP FOCUS</span>
+</div>
+<span class="font-mono-sm text-mono-sm text-outline">YESTERDAY, NOV 22</span>
+</div>
+<div class="flex items-center gap-space-sm">
+<span class="font-mono-sm text-mono-sm text-outline">11:42 PM</span>
+<button aria-label="Favorite" class="flex items-center justify-center w-7 h-7 rounded hover:bg-surface-container-high transition-colors" onclick="toggleStar(this)" type="button">
+<span class="material-symbols-outlined text-[18px] text-outline">star</span>
+</button>
+</div>
+</div>
+<!-- Title & Text Body -->
+<div class="flex flex-col gap-1">
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface font-medium tracking-tight">Late Night Studio Sketches &amp; Synthesizer</h2>
+<p class="font-body-md text-body-md text-on-surface-variant line-clamp-2">
+          Recorded ambient patch ideas on the OP-1 before winding down. The new tempo feels much more balanced with subtle polyrhythmic detuning.
+        </p>
+</div>
+<!-- Multi-Modal Previews: Audio Only Strip -->
+<div class="flex items-center justify-between px-3 py-2.5 rounded bg-surface-container-low">
+<div class="flex items-center gap-space-sm">
+<button class="flex items-center justify-center w-8 h-8 rounded bg-surface-container-highest text-tertiary hover:bg-tertiary hover:text-on-tertiary transition-colors" onclick="toggleAudio(this)" type="button">
+<span class="material-symbols-outlined text-[18px]">play_arrow</span>
+</button>
+<div class="flex flex-col">
+<span class="font-label-caps text-label-caps text-outline">SYNTH LOG OP-1</span>
+<span class="font-mono-sm text-mono-sm text-on-surface font-medium">04:15</span>
+</div>
+</div>
+<!-- Waveform Simulation with Playhead -->
+<div class="flex items-center gap-0.5 h-6 px-2">
+<span class="w-[2px] h-1 bg-tertiary rounded-sm"></span>
+<span class="w-[2px] h-3 bg-tertiary rounded-sm"></span>
+<span class="w-[2px] h-5 bg-tertiary rounded-sm"></span>
+<span class="w-[2px] h-4 bg-tertiary rounded-sm"></span>
+<span class="w-[2px] h-6 bg-tertiary rounded-sm"></span>
+<span class="w-[2px] h-2 bg-tertiary rounded-sm"></span>
+<span class="w-[2px] h-5 bg-tertiary rounded-sm"></span>
+<span class="w-[2px] h-3 bg-tertiary rounded-sm"></span>
+<span class="w-[2px] h-1 bg-tertiary rounded-sm"></span>
+<span class="w-[2px] h-4 bg-surface-variant rounded-sm"></span>
+<span class="w-[2px] h-2 bg-surface-variant rounded-sm"></span>
+<span class="w-[2px] h-1 bg-surface-variant rounded-sm"></span>
+</div>
+</div>
+</article>
+<!-- CARD 3: Thursday, Nov 21 -->
+<article class="flex flex-col p-space-md rounded-xl bg-surface-container gap-space-md shadow-md" data-card-type="photo voice">
+<!-- Card Meta Top Row -->
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<!-- Mood: Radiant Star -->
+<div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-container-highest">
+<span class="material-symbols-outlined text-[16px] text-secondary" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+<span class="font-label-caps text-label-caps text-secondary">SERENE</span>
+</div>
+<span class="font-mono-sm text-mono-sm text-outline">THU, NOV 21</span>
+</div>
+<div class="flex items-center gap-space-sm">
+<span class="font-mono-sm text-mono-sm text-outline">04:30 PM</span>
+<button aria-label="Favorite" class="flex items-center justify-center w-7 h-7 rounded hover:bg-surface-container-high transition-colors" onclick="toggleStar(this)" type="button">
+<span class="material-symbols-outlined text-[18px] text-outline">star</span>
+</button>
+</div>
+</div>
+<!-- Rich Photo Thumbnail Banner -->
+<div class="relative w-full h-44 rounded-lg overflow-hidden bg-surface-container-lowest">
+<img class="w-full h-full object-cover" data-alt="Panoramic scenic coastal highway along a jagged black volcanic rock shoreline, wet asphalt glistening under twilight mist, dark Pacific ocean waves crashing in distance, atmospheric high-contrast film aesthetic, cool slate and charcoal palette." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBfds10Gzz8lFZl01cFmwEIQB0QhRMH6-_ejOW_dNyQkBYTt_B__J9lbAp6CkniicA2wVTeOzC9ZGc7BjK7HAWJXQRWdLU21xYMIv5ZpLmtdXN16GN-rKffn2HR9fr-cxAx9OEbqwKgHiGDXs8kFVsA3rBiZXCOCk9hqdSOWIJ_IuRrWJDI6aqYgjsAdTPrfao1w_bjxxLYkBhGvILgdwPrmLtF2TOP3armAUeTl3sv"/>
+<!-- Embedded Location Pin Badge -->
+<div class="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 rounded bg-surface-container-lowest/85 backdrop-blur-md">
+<span class="material-symbols-outlined text-[14px] text-tertiary">near_me</span>
+<span class="font-mono-sm text-mono-sm text-on-surface">PACIFIC ROUTE 1</span>
+</div>
+</div>
+<!-- Title & Text Body -->
+<div class="flex flex-col gap-1">
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface font-medium tracking-tight">Coastline Drive &amp; Solitude</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">
+          Salt spray on windshield. Zero phone calls for 4 hours.
+        </p>
+</div>
+<!-- Audio Micro-Chip -->
+<div class="flex items-center justify-between px-3 py-2 rounded bg-surface-container-low">
+<div class="flex items-center gap-space-sm">
+<button class="flex items-center justify-center w-7 h-7 rounded bg-surface-container-highest text-tertiary hover:bg-tertiary hover:text-on-tertiary transition-colors" onclick="toggleAudio(this)" type="button">
+<span class="material-symbols-outlined text-[16px]">play_arrow</span>
+</button>
+<span class="font-label-caps text-label-caps text-outline">OCEAN AMBIENT</span>
+</div>
+<div class="flex items-center gap-space-sm">
+<div class="flex items-center gap-0.5 h-4">
+<span class="w-[2px] h-3 bg-tertiary rounded-sm"></span>
+<span class="w-[2px] h-1.5 bg-tertiary rounded-sm"></span>
+<span class="w-[2px] h-4 bg-tertiary rounded-sm"></span>
+<span class="w-[2px] h-2 bg-surface-variant rounded-sm"></span>
+</div>
+<span class="font-mono-sm text-mono-sm text-on-surface-variant">00:58</span>
+</div>
+</div>
+</article>
+</div>
+<!-- End of Stream Tactile Terminal Node -->
+<div class="flex flex-col items-center justify-center py-space-lg gap-space-sm">
+<div class="w-1.5 h-1.5 rounded-full bg-surface-variant"></div>
+<span class="font-label-caps text-label-caps text-outline tracking-widest">END OF TRANSMISSION // ALL CHRONOLOGIES SYNCED</span>
+</div>
+</div>
+<script>
+  function switchFilter(type) {
+    const tabs = ['all', 'voice', 'photo'];
+    tabs.forEach(t => {
+      const btn = document.getElementById('tab-' + t);
+      if (t === type) {
+        btn.className = "flex-1 py-1.5 px-3 rounded bg-surface-container-high text-on-surface font-label-caps text-label-caps tracking-wider text-center transition-all shadow-sm";
+      } else {
+        btn.className = "flex-1 py-1.5 px-3 rounded text-outline hover:text-on-surface font-label-caps text-label-caps tracking-wider text-center transition-all";
+      }
+    });
+
+    const cards = document.querySelectorAll('[data-card-type]');
+    cards.forEach(card => {
+      const types = card.getAttribute('data-card-type');
+      if (type === 'all' || types.includes(type)) {
+        card.style.display = 'flex';
+      } else {
+        card.style.display = 'none';
+      }
+    });
+  }
+
+  function toggleStar(btn) {
+    const icon = btn.querySelector('.material-symbols-outlined');
+    const isFilled = icon.style.fontVariationSettings && icon.style.fontVariationSettings.includes("'FILL' 1");
+    if (isFilled) {
+      icon.style.fontVariationSettings = "'FILL' 0";
+      icon.classList.remove('text-primary');
+      icon.classList.add('text-outline');
+    } else {
+      icon.style.fontVariationSettings = "'FILL' 1";
+      icon.classList.remove('text-outline');
+      icon.classList.add('text-primary');
+    }
+  }
+
+  function toggleAudio(btn) {
+    const icon = btn.querySelector('.material-symbols-outlined');
+    if (icon.innerText === 'play_arrow') {
+      icon.innerText = 'pause';
+      btn.classList.add('bg-tertiary', 'text-on-tertiary');
+      btn.classList.remove('bg-surface-container-highest', 'text-tertiary');
+    } else {
+      icon.innerText = 'play_arrow';
+      btn.classList.remove('bg-tertiary', 'text-on-tertiary');
+      btn.classList.add('bg-surface-container-highest', 'text-tertiary');
+    }
+  }
+</script></main><nav class="fixed bottom-0 w-full z-50 pb-safe bg-surface/85 backdrop-blur-xl shadow-[0_-4px_24px_rgba(0,0,0,0.5)]" data-active-classes="text-primary"><div class="flex items-center justify-between h-20 px-gutter"><a class="flex flex-col items-center justify-center gap-space-xs min-w-[44px] min-h-[44px] w-14 text-on-surface-variant transition-colors hover:text-on-surface" data-path="today" href="#"><span class="material-symbols-outlined text-[20px]">calendar_today</span><span class="font-label-caps text-label-caps">TODAY</span></a><a aria-current="page" class="flex flex-col items-center justify-center gap-space-xs min-w-[44px] min-h-[44px] w-14 transition-colors text-primary" data-path="timeline" href="#"><span class="material-symbols-outlined text-[20px]">view_timeline</span><span class="font-label-caps text-label-caps">STREAM</span></a><div class="relative flex items-center justify-center -top-4"><a class="flex items-center justify-center w-12 h-12 rounded-xl bg-primary text-on-primary shadow-[0_0_20px_rgba(192,193,255,0.35)] transition-transform active:scale-95" data-path="quick-capture" href="#"><span class="material-symbols-outlined text-[24px]">add</span></a></div><a class="flex flex-col items-center justify-center gap-space-xs min-w-[44px] min-h-[44px] w-14 text-on-surface-variant transition-colors hover:text-on-surface" data-path="search" href="#"><span class="material-symbols-outlined text-[20px]">search</span><span class="font-label-caps text-label-caps">SEARCH</span></a><a class="flex flex-col items-center justify-center gap-space-xs min-w-[44px] min-h-[44px] w-14 text-on-surface-variant transition-colors hover:text-on-surface" data-path="settings" href="#"><span class="material-symbols-outlined text-[20px]">tune</span><span class="font-label-caps text-label-caps">VAULT</span></a></div></nav></body></html>
