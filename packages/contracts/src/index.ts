@@ -60,6 +60,27 @@ export const EntrySectionOutputSchema = EntrySectionInputSchema.extend({
 });
 export type EntrySectionOutput = z.infer<typeof EntrySectionOutputSchema>;
 
+export const AudioNoteAttachmentSchema = z.object({
+  id: z.string(),
+  url: z.string(),
+  durationSeconds: z.number().int(),
+  mimeType: z.string().default("audio/m4a"),
+  waveform: z.array(z.number()).optional(),
+  createdAt: z.string(),
+});
+export type AudioNoteAttachment = z.infer<typeof AudioNoteAttachmentSchema>;
+
+export const PhotoAttachmentSchema = z.object({
+  id: z.string(),
+  url: z.string(),
+  filename: z.string(),
+  caption: z.string().optional().nullable(),
+  sizeBytes: z.number().int().optional(),
+  mimeType: z.string().default("image/jpeg"),
+  createdAt: z.string(),
+});
+export type PhotoAttachment = z.infer<typeof PhotoAttachmentSchema>;
+
 export const CreateEntrySchema = z.object({
   entryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD format"),
   title: z.string().max(255).optional().nullable(),
@@ -70,6 +91,8 @@ export const CreateEntrySchema = z.object({
   isFavorite: z.boolean().default(false),
   sections: z.array(EntrySectionInputSchema).optional().default([]),
   tags: z.array(z.string().min(1).max(50)).optional().default([]),
+  audioNotes: z.array(AudioNoteAttachmentSchema).optional(),
+  photos: z.array(PhotoAttachmentSchema).optional(),
 });
 export type CreateEntryInput = z.infer<typeof CreateEntrySchema>;
 
@@ -83,6 +106,8 @@ export const UpdateEntrySchema = z.object({
   isFavorite: z.boolean().optional(),
   sections: z.array(EntrySectionInputSchema).optional(),
   tags: z.array(z.string().min(1).max(50)).optional(),
+  audioNotes: z.array(AudioNoteAttachmentSchema).optional(),
+  photos: z.array(PhotoAttachmentSchema).optional(),
 });
 export type UpdateEntryInput = z.infer<typeof UpdateEntrySchema>;
 
@@ -99,6 +124,8 @@ export const JournalEntryResponseSchema = z.object({
   revision: z.number(),
   sections: z.array(EntrySectionOutputSchema),
   tags: z.array(z.string()),
+  audioNotes: z.array(AudioNoteAttachmentSchema).optional(),
+  photos: z.array(PhotoAttachmentSchema).optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

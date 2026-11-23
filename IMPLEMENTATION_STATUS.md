@@ -68,8 +68,19 @@ Current status: Phase 8 complete. Ready for Phase 9 (Export/import, security, te
   - Implemented backup snapshots, history listing, restore preview, and merge vs. overwrite restore options.
   - Implemented entry attachments metadata tracking linked to journal entries with file size (< 25MB) and MIME validation.
   - Mounted endpoints under `/api/v1/integrations/drive/*` and `/api/v1/entries/:id/attachments` with strict user ownership isolation.
-  - Connected Drive cloud backup card in `apps/client/app/(tabs)/settings.tsx` with live status, Backup Now trigger, history list, and restore dialog.
-  - 22 automated integration tests passing, clean typecheck, and clean Metro web export.
+- Phase 8: Google Calendar read-only integration:
+  - Added Calendar contracts in `@myday/contracts` (`CalendarStatusResponse`, `CalendarConnectInput`, `CalendarEventItem`, `CalendarEventsResponse`).
+  - Implemented strictly read-only calendar service requesting only `calendar.events.readonly` with zero event modification permissions.
+  - Added routes under `/api/v1/integrations/calendar/*` with token encryption and simulated context for local dev.
+  - Added Day Schedule Context card in the Today tab and connection settings card.
+- Stitch Luxury UI Redesign & Dual-Mode Media Architecture:
+  - Redesigned Today reflection canvas in `apps/client/app/(tabs)/index.tsx` based on the Stitch luxury design export.
+  - Added **Dual-Mode Switcher**: Clean segmented toggle between `[ Type Reflection ]` and `[ Record Note ]`.
+  - Added **Raw Audio Recording Studio & Acoustic Player**: Oscillating sound-wave bars, elapsed timer, play/pause controls, speed toggle (`1.2x`), strictly zero speech-to-text transcription to preserve voice privacy.
+  - Added **Visual Captures Bento Grid**: 2-column photo grid with `+ Add Picture` (real web file upload & preview), remove buttons (`✕`), and timestamped captions.
+  - Integrated Stitch design tokens in `apps/client/src/theme/index.ts` (`#11131a` canvas, `#191b23` / `#1d1f27` container surfaces, `#c0c1ff` iris accent, `#b50036` recording rose).
+  - Added `AudioNoteAttachmentSchema` and `PhotoAttachmentSchema` to `@myday/contracts` and persisted in `entryService.ts`.
+  - Verified 100% clean TypeScript typechecks across all 5 workspace projects, 23/23 API tests passing, and 10/10 static web routes cleanly exported in 1.07 MB.
 
 ## Manual Configuration Needed for Live Auth
 

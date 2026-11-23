@@ -77,6 +77,8 @@ inMemoryEntries.set(devEntryId, {
     },
   ],
   tags: ["reflection", "mindfulness"],
+  audioNotes: [],
+  photos: [],
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 });
@@ -463,6 +465,8 @@ export const entryService = {
         updatedAt: now,
       })),
       tags: input.tags || [],
+      audioNotes: input.audioNotes || [],
+      photos: input.photos || [],
       createdAt: now,
       updatedAt: now,
     };
@@ -625,6 +629,8 @@ export const entryService = {
           }))
         : entry.sections,
       tags: input.tags !== undefined ? input.tags : entry.tags,
+      audioNotes: input.audioNotes !== undefined ? input.audioNotes : (entry.audioNotes || []),
+      photos: input.photos !== undefined ? input.photos : (entry.photos || []),
       updatedAt: now,
     };
 

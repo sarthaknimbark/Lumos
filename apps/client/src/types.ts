@@ -1,3 +1,5 @@
+import { AudioNoteAttachment, PhotoAttachment } from "@myday/contracts";
+
 export type MoodLevel = 1 | 2 | 3 | 4 | 5;
 export type EnergyLevel = 1 | 2 | 3 | 4 | 5;
 
@@ -17,6 +19,8 @@ export interface JournalEntryMock {
   isFavorite: boolean;
   tags: string[];
   sections: EntrySection[];
+  audioNotes?: AudioNoteAttachment[];
+  photos?: PhotoAttachment[];
   createdAt: string;
   updatedAt: string;
   syncStatus: "synced" | "draft" | "local_only";

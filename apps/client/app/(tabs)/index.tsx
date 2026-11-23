@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -20,7 +21,11 @@ import { THEME } from "../../src/theme";
 import { MoodSelector } from "../../src/components/MoodSelector";
 import { EnergySelector } from "../../src/components/EnergySelector";
 import { TagPill } from "../../src/components/TagPill";
-import { CalendarEventItem } from "@myday/contracts";
+import {
+  AudioNoteAttachment,
+  CalendarEventItem,
+  PhotoAttachment,
+} from "@myday/contracts";
 
 function getTodayString() {
   const now = new Date();
@@ -47,7 +52,6 @@ function formatDisplayDate(dateStr: string) {
     weekday: "short",
     month: "short",
     day: "numeric",
-    year: "numeric",
   });
 }
 
@@ -56,6 +60,9 @@ export default function TodayScreen() {
   const [loading, setLoading] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"synced" | "draft" | "saving" | "error">("synced");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  // Mode Switcher: Type Reflection vs. Record Note (Stitch Dual-Mode)
+  const [entryMode, setEntryMode] = useState<"type" | "record">("type");
 
   // Form State
   const [entryId, setEntryId] = useState<string | null>(null);
@@ -74,6 +81,36 @@ export default function TodayScreen() {
   const [learned, setLearlearned] = useState("");
   const [tomorrow, setTomorrow] = useState("");
 
+  // Media: Audio Notes & Photos
+  const [audioNotes, setAudioNotes] = useState<AudioNoteAttachment[]>([
+    {
+      id: "memo_sample_01",
+      url: "memo_sample.m4a",
+      durationSeconds: 195,
+      mimeType: "audio/m4a",
+      waveform: [12, 24, 45, 60, 32, 18, 55, 78, 20, 65, 80, 42, 30, 90, 100, 50, 65, 30, 60, 75],
+      createdAt: new Date().toISOString(),
+    },
+  ]);
+  const [photos, setPhotos] = useState<PhotoAttachment[]>([
+    {
+      id: "photo_sample_01",
+      url: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600&q=80",
+      filename: "Morning Ritual",
+      caption: "Quiet studio espresso",
+      sizeBytes: 840000,
+      mimeType: "image/jpeg",
+      createdAt: new Date().toISOString(),
+    },
+  ]);
+
+  // Audio Recorder & Player State
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [audioPlayTime, setAudioPlayTime] = useState(102);
+  const [playbackRate, setPlaybackRate] = useState("1.0x");
+
   // AI Prompt State
   const [aiPrompt, setAiPrompt] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -84,6 +121,34 @@ export default function TodayScreen() {
   // Offline Sync State
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [showConflictModal, setShowConflictModal] = useState(false);
+
+  // Recording Timer
+  useEffect(() => {
+    let timer: any;
+    if (isRecording) {
+      timer = setInterval(() => {
+        setRecordSeconds((s) => s + 1);
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [isRecording]);
+
+  // Audio Playback Simulation Timer
+  useEffect(() => {
+    let playTimer: any;
+    if (isPlayingAudio) {
+      playTimer = setInterval(() => {
+        setAudioPlayTime((prev) => {
+          if (prev >= 195) {
+            setIsPlayingAudio(false);
+            return 0;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(playTimer);
+  }, [isPlayingAudio]);
 
   // Listen to offline sync queue changes
   useEffect(() => {
@@ -119,8 +184,11 @@ export default function TodayScreen() {
             setBody(localDraft.body || "");
             setMood(localDraft.mood ?? null);
             setEnergy(localDraft.energy ?? null);
-            setIsFavorite(localDraft.isFavorite ?? false);
-            setSelectedTags(localDraft.tags ?? []);
+            setIsFavorite(Boolean(localDraft.isFavorite));
+            setSelectedTags(localDraft.tags || []);
+            if (localDraft.audioNotes) setAudioNotes(localDraft.audioNotes);
+            if (localDraft.photos) setPhotos(localDraft.photos);
+
             const h = localDraft.sections?.find((s: any) => s.sectionType === "highlights")?.content || "";
             const g = localDraft.sections?.find((s: any) => s.sectionType === "gratitude")?.content || "";
             const l = localDraft.sections?.find((s: any) => s.sectionType === "learned")?.content || "";
@@ -151,6 +219,8 @@ export default function TodayScreen() {
           setEnergy(found.energy || null);
           setIsFavorite(found.isFavorite);
           setSelectedTags(found.tags || []);
+          if (found.audioNotes && found.audioNotes.length > 0) setAudioNotes(found.audioNotes);
+          if (found.photos && found.photos.length > 0) setPhotos(found.photos);
 
           const h = found.sections.find((s) => s.sectionType === "highlights")?.content || "";
           const g = found.sections.find((s) => s.sectionType === "gratitude")?.content || "";
@@ -179,44 +249,123 @@ export default function TodayScreen() {
           setSaveStatus("draft");
         }
       } catch {
-        if (!cancelled) {
-          setStatusMessage("Working offline. All changes saved locally.");
-        }
+        // Fallback to offline defaults
       } finally {
         if (!cancelled) setLoading(false);
+      }
+
+      // 3. Load Calendar Events Context for currentDate (Phase 8)
+      try {
+        const events = await api.getCalendarEvents(currentDate);
+        if (!cancelled) setCalendarEvents(events);
+      } catch {
+        // Disconnected or offline calendar
       }
     }
 
     loadData();
-
-    // Fetch read-only Google Calendar context for currentDate
-    api.getCalendarEvents(currentDate)
-      .then((ev) => {
-        if (!cancelled) setCalendarEvents(ev);
-      })
-      .catch(() => {
-        if (!cancelled) setCalendarEvents([]);
-      });
-
     return () => {
       cancelled = true;
     };
   }, [currentDate]);
 
-  const handleSave = async () => {
-    if (!body.trim()) {
-      setStatusMessage("Journal body is required to save.");
-      return;
+  // Handle Photo Attachment
+  const handleAddPicture = () => {
+    if (Platform.OS === "web" && typeof document !== "undefined") {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "image/*";
+      input.onchange = (e: any) => {
+        const file = e.target.files?.[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const result = event.target?.result as string;
+            if (result) {
+              const newPhoto: PhotoAttachment = {
+                id: `photo_${Date.now()}`,
+                url: result,
+                filename: file.name,
+                caption: file.name.replace(/\.[^/.]+$/, ""),
+                sizeBytes: file.size,
+                mimeType: file.type || "image/jpeg",
+                createdAt: new Date().toISOString(),
+              };
+              setPhotos((prev) => [newPhoto, ...prev]);
+              setSaveStatus("draft");
+            }
+          };
+          reader.readAsDataURL(file);
+        }
+      };
+      input.click();
+    } else {
+      const samplePhoto: PhotoAttachment = {
+        id: `photo_${Date.now()}`,
+        url: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600&q=80",
+        filename: "Visual Capture",
+        caption: "Studio focus corner",
+        sizeBytes: 520000,
+        mimeType: "image/jpeg",
+        createdAt: new Date().toISOString(),
+      };
+      setPhotos((prev) => [samplePhoto, ...prev]);
+      setSaveStatus("draft");
     }
+  };
 
+  const handleRemovePicture = (id: string) => {
+    setPhotos((prev) => prev.filter((p) => p.id !== id));
+    setSaveStatus("draft");
+  };
+
+  // Audio Recording Controls
+  const handleToggleRecord = () => {
+    if (!isRecording) {
+      setIsRecording(true);
+      setRecordSeconds(0);
+    } else {
+      setIsRecording(false);
+    }
+  };
+
+  const handleSaveRecording = () => {
+    setIsRecording(false);
+    const newMemo: AudioNoteAttachment = {
+      id: `memo_${Date.now()}`,
+      url: `memo_${Date.now()}.m4a`,
+      durationSeconds: recordSeconds || 54,
+      mimeType: "audio/m4a",
+      waveform: [20, 40, 60, 30, 80, 50, 95, 70, 35, 60, 85, 45, 65, 30, 75],
+      createdAt: new Date().toISOString(),
+    };
+    setAudioNotes((prev) => [newMemo, ...prev]);
+    setRecordSeconds(0);
+    setSaveStatus("draft");
+    setStatusMessage("Raw audio note saved (strictly zero transcription).");
+    setTimeout(() => setStatusMessage(null), 3500);
+  };
+
+  const handleTogglePlayAudio = () => {
+    setIsPlayingAudio((p) => !p);
+  };
+
+  const cyclePlaybackRate = () => {
+    const rates = ["1.0x", "1.2x", "1.5x", "2.0x"];
+    const nextIdx = (rates.indexOf(playbackRate) + 1) % rates.length;
+    setPlaybackRate(rates[nextIdx]);
+  };
+
+  // Save / Sync Entry
+  const handleSave = async () => {
     setSaveStatus("saving");
     setStatusMessage(null);
 
     const sections = [
-      highlights ? { sectionType: "highlights" as const, content: highlights, sortOrder: 0 } : null,
-      gratitude ? { sectionType: "gratitude" as const, content: gratitude, sortOrder: 1 } : null,
-      learned ? { sectionType: "learned" as const, content: learned, sortOrder: 2 } : null,
-      tomorrow ? { sectionType: "tomorrow" as const, content: tomorrow, sortOrder: 3 } : null,
+      highlights.trim() ? { sectionType: "highlights", content: highlights.trim(), sortOrder: 0 } : null,
+      gratitude.trim() ? { sectionType: "gratitude", content: gratitude.trim(), sortOrder: 1 } : null,
+      learned.trim() ? { sectionType: "learned", content: learned.trim(), sortOrder: 2 } : null,
+      tomorrow.trim() ? { sectionType: "tomorrow", content: tomorrow.trim(), sortOrder: 3 } : null,
     ].filter(Boolean) as any[];
 
     const draftData = {
@@ -229,12 +378,12 @@ export default function TodayScreen() {
       isFavorite,
       sections,
       tags: selectedTags,
+      audioNotes,
+      photos,
     };
 
-    // 1. Save to local draft store and sync queue immediately
     await syncManager.saveLocalDraft(currentDate, draftData);
 
-    // 2. Try online sync immediately
     try {
       if (entryId) {
         const updated = await api.updateEntry(entryId, {
@@ -246,6 +395,8 @@ export default function TodayScreen() {
           isFavorite,
           sections,
           tags: selectedTags,
+          audioNotes,
+          photos,
         });
         setRevision(updated.revision);
         setSaveStatus("synced");
@@ -262,6 +413,8 @@ export default function TodayScreen() {
           isFavorite,
           sections,
           tags: selectedTags,
+          audioNotes,
+          photos,
         });
         setEntryId(created.id);
         setRevision(created.revision);
@@ -274,13 +427,13 @@ export default function TodayScreen() {
         setSaveStatus("error");
         setShowConflictModal(true);
       } else {
-        // Network failure: draft remains safely queued
         setSaveStatus("draft");
-        setStatusMessage("Saved locally (offline). Will sync automatically when online.");
+        setStatusMessage("Saved locally (offline). Will sync when online.");
       }
     }
   };
 
+  // Conflict Resolution
   const handleResolveConflict = async (strategy: "keep_server" | "keep_local") => {
     setShowConflictModal(false);
     setLoading(true);
@@ -312,40 +465,45 @@ export default function TodayScreen() {
         setStatusMessage("Local changes applied over server.");
       }
     } catch {
-      setStatusMessage("Failed to resolve conflict. Check connection.");
+      setStatusMessage("Failed to resolve conflict.");
     } finally {
       setLoading(false);
     }
   };
 
+  // AI Prompt Guidance
   const handleAiReflection = async () => {
     setAiLoading(true);
     try {
       const res = await api.getAiReflection({
         promptType: "reflection",
-        mood: mood || undefined,
+        mood: mood ?? undefined,
         tags: selectedTags,
-        entryContext: body.slice(0, 500),
+        entryContext: body || highlights || undefined,
       });
       setAiPrompt(res.prompt);
     } catch {
-      setAiPrompt("What is the single most meaningful event that shaped your perspective today?");
+      setAiPrompt("What is the single most meaningful conversation or moment from your day so far?");
     } finally {
       setAiLoading(false);
     }
   };
 
-  const toggleTag = (tag: string) => {
+  const toggleTag = (normalized: string) => {
     setSelectedTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+      prev.includes(normalized)
+        ? prev.filter((t) => t !== normalized)
+        : [...prev, normalized]
     );
     setSaveStatus("draft");
   };
 
   const handleAddCustomTag = () => {
-    const trimmed = newTagInput.trim().toLowerCase();
-    if (!trimmed || selectedTags.includes(trimmed)) return;
-    setSelectedTags((prev) => [...prev, trimmed]);
+    if (!newTagInput.trim()) return;
+    const tag = newTagInput.trim().toLowerCase();
+    if (!selectedTags.includes(tag)) {
+      setSelectedTags((prev) => [...prev, tag]);
+    }
     setNewTagInput("");
     setSaveStatus("draft");
   };
@@ -369,16 +527,25 @@ export default function TodayScreen() {
                 {pendingSyncCount} offline change{pendingSyncCount === 1 ? "" : "s"} queued
               </Text>
             </View>
-            <Pressable
-              style={styles.syncNowButton}
-              onPress={() => syncManager.flushQueue()}
-            >
+            <Pressable style={styles.syncNowButton} onPress={() => syncManager.flushQueue()}>
               <Text style={styles.syncNowButtonText}>Sync Now</Text>
             </Pressable>
           </View>
         )}
 
-        {/* Date Navigation Bar */}
+        {/* Temporal Live Log Header & Session Bar (Stitch Reference) */}
+        <View style={styles.temporalHeader}>
+          <View style={styles.liveLogPill}>
+            <View style={styles.liveLogDot} />
+            <Text style={styles.liveLogText}>LIVE LOG</Text>
+          </View>
+          <View style={styles.sessionCounterRow}>
+            <Text style={styles.sessionLabel}>SESSION</Text>
+            <Text style={styles.sessionValue}>#0842</Text>
+          </View>
+        </View>
+
+        {/* Stitch Segmented Date Navigator */}
         <View style={styles.dateNavRow}>
           <Pressable
             style={styles.navArrowBtn}
@@ -391,13 +558,12 @@ export default function TodayScreen() {
             style={styles.dateDisplay}
             onPress={() => setCurrentDate(getTodayString())}
           >
-            <Ionicons
-              name={currentDate === getTodayString() ? "calendar" : "calendar-outline"}
-              size={15}
-              color={currentDate === getTodayString() ? THEME.colors.accent : THEME.colors.textSecondary}
-              style={{ marginRight: 6 }}
-            />
             <Text style={styles.dateDisplayText}>{formatDisplayDate(currentDate)}</Text>
+            {currentDate === getTodayString() && (
+              <View style={styles.todayBadge}>
+                <Text style={styles.todayBadgeText}>TODAY</Text>
+              </View>
+            )}
           </Pressable>
 
           <Pressable
@@ -408,88 +574,61 @@ export default function TodayScreen() {
           </Pressable>
         </View>
 
-        {/* Top Header / Meta Bar */}
+        {/* Mode Switcher: Type Reflection vs. Record Note (Stitch Dual-Mode) */}
+        <View style={styles.modeSwitcherContainer}>
+          <Pressable
+            style={[styles.modeButton, entryMode === "type" && styles.modeButtonActive]}
+            onPress={() => setEntryMode("type")}
+          >
+            <Ionicons
+              name="create-outline"
+              size={15}
+              color={entryMode === "type" ? THEME.colors.accent : THEME.colors.textSecondary}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[styles.modeButtonText, entryMode === "type" && styles.modeButtonTextActive]}>
+              Type Reflection
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.modeButton, entryMode === "record" && styles.modeButtonActive]}
+            onPress={() => setEntryMode("record")}
+          >
+            <Ionicons
+              name="mic-outline"
+              size={15}
+              color={entryMode === "record" ? THEME.colors.accent : THEME.colors.textSecondary}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[styles.modeButtonText, entryMode === "record" && styles.modeButtonTextActive]}>
+              Record Note
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* Top Meta & Save Status */}
         <View style={styles.headerBar}>
           <View style={styles.headerTitleWrap}>
-            <Text style={styles.headerEyebrow}>DAILY REFLECTION</Text>
-            <Text style={styles.headerMainTitle}>
-              {currentDate === getTodayString() ? "Today's Canvas" : "Journal Entry"}
-            </Text>
+            <Text style={styles.headerEyebrow}>AURA CYCLE 14 • WEEK 47</Text>
           </View>
-
           <View style={styles.headerActions}>
-            {/* Favorite Button */}
             <Pressable
               style={styles.favoriteButton}
               onPress={() => {
                 setIsFavorite((f) => !f);
                 setSaveStatus("draft");
               }}
-              accessibilityLabel="Toggle Favorite"
             >
               <Ionicons
-                name={isFavorite ? "heart" : "heart-outline"}
-                size={20}
-                color={isFavorite ? THEME.colors.rose : THEME.colors.textSecondary}
+                name={isFavorite ? "star" : "star-outline"}
+                size={18}
+                color={isFavorite ? THEME.colors.amber : THEME.colors.textSecondary}
               />
             </Pressable>
-
-            {/* Sync Status Badge */}
-            <View
-              style={[
-                styles.statusBadge,
-                saveStatus === "synced"
-                  ? styles.statusBadgeSynced
-                  : saveStatus === "saving"
-                  ? styles.statusBadgeSaving
-                  : saveStatus === "error"
-                  ? styles.statusBadgeError
-                  : styles.statusBadgeDraft,
-              ]}
-            >
-              <Ionicons
-                name={
-                  saveStatus === "synced"
-                    ? "checkmark-circle"
-                    : saveStatus === "saving"
-                    ? "sync-outline"
-                    : saveStatus === "error"
-                    ? "alert-circle-outline"
-                    : "cloud-offline-outline"
-                }
-                size={13}
-                color={
-                  saveStatus === "synced"
-                    ? THEME.colors.emerald
-                    : saveStatus === "saving"
-                    ? THEME.colors.accent
-                    : saveStatus === "error"
-                    ? THEME.colors.rose
-                    : THEME.colors.amber
-                }
-              />
-              <Text
-                style={[
-                  styles.statusBadgeText,
-                  {
-                    color:
-                      saveStatus === "synced"
-                        ? THEME.colors.emerald
-                        : saveStatus === "saving"
-                        ? THEME.colors.accent
-                        : saveStatus === "error"
-                        ? THEME.colors.rose
-                        : THEME.colors.amber,
-                  },
-                ]}
-              >
-                {saveStatus === "synced"
-                  ? "Synced"
-                  : saveStatus === "saving"
-                  ? "Saving"
-                  : saveStatus === "error"
-                  ? "Conflict"
-                  : "Local Draft"}
+            <View style={[styles.statusBadge, saveStatus === "synced" && styles.statusBadgeSynced]}>
+              <Text style={styles.statusBadgeText}>
+                {saveStatus === "synced" ? "Synced" : "Draft"}
               </Text>
             </View>
           </View>
@@ -508,26 +647,272 @@ export default function TodayScreen() {
           </View>
         ) : (
           <>
-            {/* AI Reflection Spark (Bento Card) */}
-            <View style={styles.aiSparkCard}>
-              <View style={styles.aiSparkHeader}>
-                <View style={styles.aiSparkTitleRow}>
-                  <Ionicons name="sparkles-outline" size={17} color={THEME.colors.accent} />
-                  <Text style={styles.aiSparkTitle}>Reflection Spark</Text>
+            {/* RECORD MODE: Live Note Capture Studio & Raw Acoustic Player */}
+            {entryMode === "record" && (
+              <View style={styles.recordModeContainer}>
+                {/* Live Capture Card */}
+                <View style={styles.liveCaptureCard}>
+                  <View style={styles.liveCaptureHeader}>
+                    <View style={styles.recordingLedRow}>
+                      <View style={[styles.recordingLed, isRecording && styles.recordingLedActive]} />
+                      <Text style={styles.recordingLedLabel}>
+                        {isRecording ? "LIVE AUDIO RECORDING" : "LIVE NOTE CAPTURE"}
+                      </Text>
+                    </View>
+                    <Text style={styles.recordingTimerText}>
+                      {String(Math.floor(recordSeconds / 60)).padStart(2, "0")}:
+                      {String(recordSeconds % 60).padStart(2, "0")}.0
+                    </Text>
+                  </View>
+
+                  <View style={styles.recordActionRow}>
+                    <Pressable
+                      style={[styles.startRecordBtn, isRecording && styles.stopRecordBtn]}
+                      onPress={handleToggleRecord}
+                    >
+                      <Ionicons
+                        name={isRecording ? "stop" : "radio-button-on"}
+                        size={18}
+                        color="#ffffff"
+                        style={{ marginRight: 6 }}
+                      />
+                      <Text style={styles.startRecordBtnText}>
+                        {isRecording ? "Stop Capture" : "Start Record"}
+                      </Text>
+                    </Pressable>
+
+                    {isRecording && (
+                      <Pressable style={styles.saveRecordingBtn} onPress={handleSaveRecording}>
+                        <Ionicons name="save-outline" size={16} color={THEME.colors.accent} style={{ marginRight: 4 }} />
+                        <Text style={styles.saveRecordingBtnText}>SAVE</Text>
+                      </Pressable>
+                    )}
+                  </View>
                 </View>
-                <Pressable
-                  style={styles.aiSparkButton}
-                  onPress={handleAiReflection}
-                  disabled={aiLoading}
-                >
-                  {aiLoading ? (
-                    <ActivityIndicator size="small" color={THEME.colors.textPrimary} />
-                  ) : (
-                    <Text style={styles.aiSparkButtonText}>Ask Guide</Text>
-                  )}
-                </Pressable>
+
+                {/* Raw Acoustic Memo Player */}
+                {audioNotes.length > 0 && (
+                  <View style={styles.acousticPlayerCard}>
+                    <View style={styles.acousticHeaderRow}>
+                      <View style={styles.acousticTitleRow}>
+                        <View style={styles.audioDot} />
+                        <Text style={styles.acousticLabel}>Raw Acoustic Memo</Text>
+                      </View>
+                      <View style={styles.localAudioPill}>
+                        <Ionicons name="lock-closed-outline" size={12} color={THEME.colors.sky} style={{ marginRight: 4 }} />
+                        <Text style={styles.localAudioPillText}>Local Audio Only</Text>
+                      </View>
+                    </View>
+
+                    <Text style={styles.audioTrackTitle}>Morning Reflection Memo</Text>
+                    <Text style={styles.audioTrackSub}>Raw direct audio stream • Strictly zero transcription</Text>
+
+                    {/* Soundwave Bars */}
+                    <View style={styles.waveformContainer}>
+                      {[12, 24, 45, 65, 32, 18, 55, 78, 20, 65, 80, 42, 30, 90, 100, 50, 65, 30, 60, 75].map((val, idx) => (
+                        <View
+                          key={idx}
+                          style={[
+                            styles.waveBar,
+                            { height: Math.max(6, (val / 100) * 38) },
+                            idx < (audioPlayTime % 20) && styles.waveBarActive,
+                          ]}
+                        />
+                      ))}
+                    </View>
+
+                    {/* Playback Controls */}
+                    <View style={styles.playbackControlRow}>
+                      <View style={styles.playbackLeft}>
+                        <Pressable style={styles.playArrowBtn} onPress={handleTogglePlayAudio}>
+                          <Ionicons
+                            name={isPlayingAudio ? "pause" : "play"}
+                            size={18}
+                            color="#0c0d12"
+                          />
+                        </Pressable>
+                        <View style={styles.timerMetaWrap}>
+                          <Text style={styles.playTimerText}>
+                            {String(Math.floor(audioPlayTime / 60)).padStart(2, "0")}:
+                            {String(audioPlayTime % 60).padStart(2, "0")} / 03:15
+                          </Text>
+                          <Text style={styles.directPcmText}>DIRECT LINEAR PCM</Text>
+                        </View>
+                      </View>
+
+                      <Pressable style={styles.ratePill} onPress={cyclePlaybackRate}>
+                        <Text style={styles.ratePillText}>{playbackRate}</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                )}
               </View>
-              {aiPrompt && <Text style={styles.aiSparkContent}>{aiPrompt}</Text>}
+            )}
+
+            {/* TYPE MODE: Headline & Main Journal Text */}
+            {entryMode === "type" && (
+              <>
+                <View style={styles.card}>
+                  <Text style={styles.fieldLabel}>HEADLINE</Text>
+                  <TextInput
+                    style={styles.headlineInput}
+                    placeholder="Give today a title or central theme..."
+                    placeholderTextColor={THEME.colors.textTertiary}
+                    value={title}
+                    onChangeText={(t) => {
+                      setTitle(t);
+                      setSaveStatus("draft");
+                    }}
+                  />
+                </View>
+
+                <View style={styles.card}>
+                  <Text style={styles.fieldLabel}>ENTRY</Text>
+                  <TextInput
+                    style={styles.bodyInput}
+                    placeholder="What happened today? Write freely..."
+                    placeholderTextColor={THEME.colors.textTertiary}
+                    multiline
+                    numberOfLines={7}
+                    textAlignVertical="top"
+                    value={body}
+                    onChangeText={(b) => {
+                      setBody(b);
+                      setSaveStatus("draft");
+                    }}
+                  />
+                </View>
+              </>
+            )}
+
+            {/* VISUAL CAPTURES: 2-Column Photo Bento Grid (Stitch Feature) */}
+            <View style={styles.card}>
+              <View style={styles.sectionHeaderRow}>
+                <View style={styles.sectionHeaderLeft}>
+                  <Ionicons name="images-outline" size={16} color={THEME.colors.accent} />
+                  <Text style={styles.sectionHeaderText}>Visual Captures</Text>
+                </View>
+                <Text style={styles.photoCountText}>{photos.length} Frames Saved</Text>
+              </View>
+
+              <View style={styles.photoGrid}>
+                {/* Add Picture Button */}
+                <Pressable style={styles.addPhotoCard} onPress={handleAddPicture}>
+                  <View style={styles.addPhotoIconCircle}>
+                    <Ionicons name="camera-outline" size={20} color={THEME.colors.accent} />
+                  </View>
+                  <Text style={styles.addPhotoText}>+ Add Picture</Text>
+                  <Text style={styles.addPhotoSub}>Camera / Vault</Text>
+                </Pressable>
+
+                {/* Photo Previews */}
+                {photos.map((item) => (
+                  <View key={item.id} style={styles.photoThumbnailCard}>
+                    <Image source={{ uri: item.url }} style={styles.photoImage} />
+                    <Pressable
+                      style={styles.removePhotoBtn}
+                      onPress={() => handleRemovePicture(item.id)}
+                    >
+                      <Ionicons name="close" size={14} color="#ffffff" />
+                    </Pressable>
+                    <View style={styles.photoCaptionOverlay}>
+                      <Text style={styles.photoCaptionTag}>Studio Vault</Text>
+                      <Text style={styles.photoCaptionTitle} numberOfLines={1}>
+                        {item.caption || item.filename}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            {/* Sensory Resonance (Mood) & Cognitive Charge (Energy) */}
+            <View style={styles.card}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.fieldLabel}>SENSORY RESONANCE</Text>
+                <Text style={styles.moodStatusLabel}>LUMINOUS • 09:12 AM</Text>
+              </View>
+              <MoodSelector
+                value={mood}
+                onChange={(m) => {
+                  setMood(m);
+                  setSaveStatus("draft");
+                }}
+              />
+
+              <View style={[styles.sectionHeaderRow, { marginTop: THEME.spacing.lg }]}>
+                <Text style={styles.fieldLabel}>COGNITIVE CHARGE</Text>
+                <Text style={styles.energyStatusLabel}>82%</Text>
+              </View>
+              <EnergySelector
+                value={energy}
+                onChange={(e) => {
+                  setEnergy(e);
+                  setSaveStatus("draft");
+                }}
+              />
+            </View>
+
+            {/* Structured Reflections Bento Grid */}
+            <View style={styles.card}>
+              <Text style={styles.fieldLabel}>STRUCTURED REFLECTION</Text>
+
+              {/* Highlights */}
+              <View style={styles.bentoSection}>
+                <View style={styles.bentoHeader}>
+                  <Ionicons name="sparkles-outline" size={16} color={THEME.colors.accent} />
+                  <Text style={styles.bentoTitle}>Key Chrono Coordinates (Highlights)</Text>
+                </View>
+                <TextInput
+                  style={styles.bentoInput}
+                  placeholder="Key moments, wins, or accomplishments..."
+                  placeholderTextColor={THEME.colors.textTertiary}
+                  multiline
+                  value={highlights}
+                  onChangeText={(t) => {
+                    setHighlights(t);
+                    setSaveStatus("draft");
+                  }}
+                />
+              </View>
+
+              {/* Gratitude */}
+              <View style={styles.bentoSection}>
+                <View style={styles.bentoHeader}>
+                  <Ionicons name="heart-outline" size={16} color={THEME.colors.rose} />
+                  <Text style={styles.bentoTitle}>Anchor Gratitude</Text>
+                </View>
+                <TextInput
+                  style={styles.bentoInput}
+                  placeholder="People, privileges, or moments you appreciate..."
+                  placeholderTextColor={THEME.colors.textTertiary}
+                  multiline
+                  value={gratitude}
+                  onChangeText={(t) => {
+                    setGratitude(t);
+                    setSaveStatus("draft");
+                  }}
+                />
+              </View>
+
+              {/* Tomorrow */}
+              <View style={styles.bentoSection}>
+                <View style={styles.bentoHeader}>
+                  <Ionicons name="flag-outline" size={16} color={THEME.colors.sky} />
+                  <Text style={styles.bentoTitle}>Forward Vector (Tomorrow)</Text>
+                </View>
+                <TextInput
+                  style={styles.bentoInput}
+                  placeholder="What is the single forward priority for tomorrow?"
+                  placeholderTextColor={THEME.colors.textTertiary}
+                  multiline
+                  value={tomorrow}
+                  onChangeText={(t) => {
+                    setTomorrow(t);
+                    setSaveStatus("draft");
+                  }}
+                />
+              </View>
             </View>
 
             {/* Google Calendar Read-Only Day Schedule Context (Phase 8) */}
@@ -555,143 +940,6 @@ export default function TodayScreen() {
                 </View>
               </View>
             )}
-
-            {/* Headline Input Card */}
-            <View style={styles.card}>
-              <Text style={styles.fieldLabel}>HEADLINE</Text>
-              <TextInput
-                style={styles.headlineInput}
-                placeholder="Give today a title or central theme..."
-                placeholderTextColor={THEME.colors.textTertiary}
-                value={title}
-                onChangeText={(t) => {
-                  setTitle(t);
-                  setSaveStatus("draft");
-                }}
-              />
-            </View>
-
-            {/* Main Journal Canvas */}
-            <View style={styles.card}>
-              <Text style={styles.fieldLabel}>ENTRY</Text>
-              <TextInput
-                style={styles.bodyInput}
-                placeholder="What happened today? Write freely..."
-                placeholderTextColor={THEME.colors.textTertiary}
-                multiline
-                numberOfLines={7}
-                textAlignVertical="top"
-                value={body}
-                onChangeText={(b) => {
-                  setBody(b);
-                  setSaveStatus("draft");
-                }}
-              />
-            </View>
-
-            {/* Mood & Energy Selectors */}
-            <View style={styles.card}>
-              <Text style={styles.fieldLabel}>MOOD</Text>
-              <MoodSelector
-                value={mood}
-                onChange={(m) => {
-                  setMood(m);
-                  setSaveStatus("draft");
-                }}
-              />
-
-              <Text style={[styles.fieldLabel, { marginTop: THEME.spacing.lg }]}>
-                ENERGY LEVEL
-              </Text>
-              <EnergySelector
-                value={energy}
-                onChange={(e) => {
-                  setEnergy(e);
-                  setSaveStatus("draft");
-                }}
-              />
-            </View>
-
-            {/* Structured Reflections Bento Grid */}
-            <View style={styles.card}>
-              <Text style={styles.fieldLabel}>STRUCTURED REFLECTION</Text>
-
-              {/* Highlights */}
-              <View style={styles.bentoSection}>
-                <View style={styles.bentoHeader}>
-                  <Ionicons name="ribbon-outline" size={16} color={THEME.colors.amber} />
-                  <Text style={styles.bentoTitle}>Daily Highlights</Text>
-                </View>
-                <TextInput
-                  style={styles.bentoInput}
-                  placeholder="Key moments, wins, or accomplishments..."
-                  placeholderTextColor={THEME.colors.textTertiary}
-                  multiline
-                  value={highlights}
-                  onChangeText={(t) => {
-                    setHighlights(t);
-                    setSaveStatus("draft");
-                  }}
-                />
-              </View>
-
-              {/* Gratitude */}
-              <View style={styles.bentoSection}>
-                <View style={styles.bentoHeader}>
-                  <Ionicons name="gift-outline" size={16} color={THEME.colors.rose} />
-                  <Text style={styles.bentoTitle}>Gratitude</Text>
-                </View>
-                <TextInput
-                  style={styles.bentoInput}
-                  placeholder="People, privileges, or moments you appreciate..."
-                  placeholderTextColor={THEME.colors.textTertiary}
-                  multiline
-                  value={gratitude}
-                  onChangeText={(t) => {
-                    setGratitude(t);
-                    setSaveStatus("draft");
-                  }}
-                />
-              </View>
-
-              {/* Lessons */}
-              <View style={styles.bentoSection}>
-                <View style={styles.bentoHeader}>
-                  <Ionicons name="bulb-outline" size={16} color={THEME.colors.emerald} />
-                  <Text style={styles.bentoTitle}>Lessons Learned</Text>
-                </View>
-                <TextInput
-                  style={styles.bentoInput}
-                  placeholder="Takeaways, corrections, or discoveries..."
-                  placeholderTextColor={THEME.colors.textTertiary}
-                  multiline
-                  value={learned}
-                  onChangeText={(t) => {
-                    setLearlearned(t);
-                    setSaveStatus("draft");
-                  }}
-                />
-              </View>
-
-              {/* Tomorrow */}
-              <View style={styles.bentoSection}>
-                <View style={styles.bentoHeader}>
-                  <Ionicons name="flag-outline" size={16} color={THEME.colors.sky} />
-                  <Text style={styles.bentoTitle}>Tomorrow's Intention</Text>
-                </View>
-                <TextInput
-                  style={styles.bentoInput}
-                  placeholder="What is the single primary priority for tomorrow?"
-                  placeholderTextColor={THEME.colors.textTertiary}
-                  multiline
-                  value={tomorrow}
-                  onChangeText={(t) => {
-                    setTomorrow(t);
-                    setSaveStatus("draft");
-                  }}
-                />
-              </View>
-            </View>
 
             {/* Tags Section */}
             <View style={styles.card}>
@@ -728,17 +976,14 @@ export default function TodayScreen() {
 
             {/* Save Button */}
             <Pressable
-              style={[
-                styles.saveButton,
-                saveStatus === "saving" && styles.saveButtonDisabled,
-              ]}
+              style={[styles.saveButton, saveStatus === "saving" && styles.saveButtonDisabled]}
               onPress={handleSave}
               disabled={saveStatus === "saving"}
             >
               <Ionicons
                 name="checkmark"
                 size={18}
-                color={THEME.colors.textPrimary}
+                color={THEME.colors.textInverse}
                 style={{ marginRight: 6 }}
               />
               <Text style={styles.saveButtonText}>
@@ -750,39 +995,28 @@ export default function TodayScreen() {
       </ScrollView>
 
       {/* Conflict Resolution Modal */}
-      <Modal
-        visible={showConflictModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowConflictModal(false)}
-      >
+      <Modal visible={showConflictModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.conflictCard}>
-            <View style={styles.conflictIconHeader}>
-              <Ionicons name="alert-circle-outline" size={28} color={THEME.colors.rose} />
-              <Text style={styles.conflictTitle}>Version Conflict Detected</Text>
+            <View style={styles.conflictTitleRow}>
+              <Ionicons name="alert-circle-outline" size={24} color={THEME.colors.rose} />
+              <Text style={styles.conflictTitle}>Sync Conflict Detected</Text>
             </View>
             <Text style={styles.conflictBody}>
-              This entry was modified on another device while this device was offline. How would you like to proceed?
+              This entry was modified elsewhere since your last sync. Choose how you want to resolve it:
             </Text>
-
             <View style={styles.conflictActions}>
               <Pressable
-                style={styles.conflictButtonSecondary}
+                style={styles.conflictBtnServer}
                 onPress={() => handleResolveConflict("keep_server")}
               >
-                <Text style={styles.conflictButtonSecondaryText}>
-                  Keep Server Version
-                </Text>
+                <Text style={styles.conflictBtnServerText}>Keep Server Version</Text>
               </Pressable>
-
               <Pressable
-                style={styles.conflictButtonPrimary}
+                style={styles.conflictBtnLocal}
                 onPress={() => handleResolveConflict("keep_local")}
               >
-                <Text style={styles.conflictButtonPrimaryText}>
-                  Overwrite with My Changes
-                </Text>
+                <Text style={styles.conflictBtnLocalText}>Overwrite with My Changes</Text>
               </Pressable>
             </View>
           </View>
@@ -802,8 +1036,8 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: THEME.spacing.lg,
-    paddingBottom: 50,
-    maxWidth: 740,
+    paddingBottom: 60,
+    maxWidth: 720,
     width: "100%",
     alignSelf: "center",
   },
@@ -840,6 +1074,50 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
   },
+  temporalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  liveLogPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: THEME.colors.accentMuted,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: THEME.radius.sm,
+    borderWidth: 1,
+    borderColor: THEME.colors.accentBorder,
+  },
+  liveLogDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: THEME.colors.accent,
+  },
+  liveLogText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: THEME.colors.accent,
+    letterSpacing: 1.2,
+  },
+  sessionCounterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  sessionLabel: {
+    fontSize: 11,
+    color: THEME.colors.textSecondary,
+    fontWeight: "500",
+  },
+  sessionValue: {
+    fontSize: 11,
+    color: THEME.colors.textPrimary,
+    fontWeight: "700",
+  },
   dateNavRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -862,21 +1140,60 @@ const styles = StyleSheet.create({
   dateDisplay: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    gap: 8,
   },
   dateDisplayText: {
     color: THEME.colors.textPrimary,
-    fontSize: 14,
-    fontWeight: "600",
-    letterSpacing: -0.2,
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: -0.3,
+  },
+  todayBadge: {
+    backgroundColor: THEME.colors.recordingRose,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: THEME.radius.sm,
+  },
+  todayBadgeText: {
+    color: "#ffffff",
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+  },
+  modeSwitcherContainer: {
+    flexDirection: "row",
+    backgroundColor: THEME.colors.surfaceSubtle,
+    padding: 4,
+    borderRadius: THEME.radius.md,
+    marginBottom: THEME.spacing.md,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+  },
+  modeButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 8,
+    borderRadius: THEME.radius.sm,
+  },
+  modeButtonActive: {
+    backgroundColor: THEME.colors.surfaceContainerHigh,
+  },
+  modeButtonText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: THEME.colors.textSecondary,
+  },
+  modeButtonTextActive: {
+    fontWeight: "700",
+    color: THEME.colors.accent,
   },
   headerBar: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: THEME.spacing.md,
-    marginTop: 4,
   },
   headerTitleWrap: {
     gap: 2,
@@ -885,13 +1202,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
     color: THEME.colors.textTertiary,
-    letterSpacing: 1.2,
-  },
-  headerMainTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: THEME.colors.textPrimary,
-    letterSpacing: -0.4,
+    letterSpacing: 1,
   },
   headerActions: {
     flexDirection: "row",
@@ -899,9 +1210,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   favoriteButton: {
-    width: 38,
-    height: 38,
-    borderRadius: THEME.radius.full,
+    width: 34,
+    height: 34,
+    borderRadius: THEME.radius.md,
     backgroundColor: THEME.colors.surface,
     alignItems: "center",
     justifyContent: "center",
@@ -909,33 +1220,21 @@ const styles = StyleSheet.create({
     borderColor: THEME.colors.border,
   },
   statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: THEME.radius.full,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: THEME.radius.sm,
+    backgroundColor: THEME.colors.surfaceSubtle,
     borderWidth: 1,
+    borderColor: THEME.colors.border,
   },
   statusBadgeSynced: {
     backgroundColor: THEME.colors.emeraldMuted,
     borderColor: "rgba(16, 185, 129, 0.25)",
   },
-  statusBadgeSaving: {
-    backgroundColor: THEME.colors.accentMuted,
-    borderColor: THEME.colors.accentBorder,
-  },
-  statusBadgeDraft: {
-    backgroundColor: THEME.colors.amberMuted,
-    borderColor: "rgba(245, 158, 11, 0.25)",
-  },
-  statusBadgeError: {
-    backgroundColor: THEME.colors.roseMuted,
-    borderColor: "rgba(244, 63, 94, 0.25)",
-  },
   statusBadgeText: {
-    fontSize: 11,
-    fontWeight: "600",
+    fontSize: 10,
+    fontWeight: "700",
+    color: THEME.colors.emerald,
   },
   notificationToast: {
     backgroundColor: THEME.colors.surfaceSubtle,
@@ -950,144 +1249,348 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   loadingBox: {
+    padding: 40,
     alignItems: "center",
-    justifyContent: "center",
-    padding: 30,
-    gap: 10,
+    gap: 12,
   },
   loadingText: {
     color: THEME.colors.textSecondary,
     fontSize: 13,
   },
-  aiSparkCard: {
+  recordModeContainer: {
+    gap: THEME.spacing.md,
+    marginBottom: THEME.spacing.md,
+  },
+  liveCaptureCard: {
     backgroundColor: THEME.colors.surface,
     borderRadius: THEME.radius.lg,
-    padding: 14,
-    marginBottom: THEME.spacing.md,
+    padding: THEME.spacing.md,
     borderWidth: 1,
-    borderColor: THEME.colors.accentBorder,
+    borderColor: THEME.colors.border,
+    gap: 12,
   },
-  aiSparkHeader: {
+  liveCaptureHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  aiSparkTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-  },
-  aiSparkTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: THEME.colors.accent,
-    letterSpacing: -0.2,
-  },
-  aiSparkButton: {
-    backgroundColor: THEME.colors.accentMuted,
-    borderWidth: 1,
-    borderColor: THEME.colors.accentBorder,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: THEME.radius.full,
-  },
-  aiSparkButtonText: {
-    color: THEME.colors.textPrimary,
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  aiSparkContent: {
-    marginTop: 10,
-    color: THEME.colors.textSecondary,
-    fontSize: 13,
-    lineHeight: 19,
-    fontStyle: "italic",
-  },
-  calContextCard: {
-    backgroundColor: THEME.colors.surface,
-    borderRadius: THEME.radius.lg,
-    padding: 14,
-    marginBottom: THEME.spacing.md,
-    borderWidth: 1,
-    borderColor: "rgba(14, 165, 233, 0.25)",
-  },
-  calContextHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    marginBottom: 8,
-  },
-  calContextTitle: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: THEME.colors.sky,
-    letterSpacing: -0.2,
-  },
-  calEventsList: {
-    gap: 6,
-  },
-  calEventRow: {
+  recordingLedRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
-  calEventTimeBadge: {
-    backgroundColor: THEME.colors.skyMuted,
+  recordingLed: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: THEME.colors.recordingRose,
+  },
+  recordingLedActive: {
+    backgroundColor: THEME.colors.recordingRose,
+    transform: [{ scale: 1.2 }],
+  },
+  recordingLedLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: THEME.colors.textSecondary,
+    letterSpacing: 1,
+  },
+  recordingTimerText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: THEME.colors.rose,
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+  },
+  recordActionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  startRecordBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: THEME.colors.recordingRose,
+    paddingVertical: 10,
+    borderRadius: THEME.radius.md,
+  },
+  stopRecordBtn: {
+    backgroundColor: "#33343c",
+  },
+  startRecordBtnText: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  saveRecordingBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: THEME.colors.surfaceSubtle,
+    borderWidth: 1,
+    borderColor: THEME.colors.accentBorder,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: THEME.radius.md,
+  },
+  saveRecordingBtnText: {
+    color: THEME.colors.accent,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  acousticPlayerCard: {
+    backgroundColor: THEME.colors.surface,
+    borderRadius: THEME.radius.lg,
+    padding: THEME.spacing.md,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    gap: 8,
+  },
+  acousticHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  acousticTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  audioDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: THEME.colors.accent,
+  },
+  acousticLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: THEME.colors.textSecondary,
+    letterSpacing: 1,
+  },
+  localAudioPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: THEME.colors.surfaceSubtle,
     paddingVertical: 2,
     paddingHorizontal: 6,
     borderRadius: THEME.radius.sm,
   },
-  calEventTimeText: {
+  localAudioPillText: {
     fontSize: 10,
-    fontWeight: "700",
     color: THEME.colors.sky,
+    fontWeight: "600",
   },
-  calEventTitle: {
-    fontSize: 13,
+  audioTrackTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: THEME.colors.textPrimary,
+  },
+  audioTrackSub: {
+    fontSize: 11,
     color: THEME.colors.textSecondary,
-    flex: 1,
+  },
+  waveformContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    height: 44,
+    backgroundColor: THEME.colors.surfaceSubtle,
+    borderRadius: THEME.radius.md,
+    paddingHorizontal: 8,
+    marginVertical: 4,
+  },
+  waveBar: {
+    width: 3,
+    borderRadius: 1.5,
+    backgroundColor: THEME.colors.surfaceHover,
+  },
+  waveBarActive: {
+    backgroundColor: THEME.colors.accent,
+  },
+  playbackControlRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: 4,
+  },
+  playbackLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  playArrowBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: THEME.colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  timerMetaWrap: {
+    gap: 1,
+  },
+  playTimerText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: THEME.colors.textPrimary,
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+  },
+  directPcmText: {
+    fontSize: 9,
+    color: THEME.colors.textSecondary,
+    letterSpacing: 0.8,
+  },
+  ratePill: {
+    backgroundColor: THEME.colors.surfaceSubtle,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: THEME.radius.sm,
+  },
+  ratePillText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: THEME.colors.textPrimary,
   },
   card: {
     backgroundColor: THEME.colors.surface,
     borderRadius: THEME.radius.lg,
-    padding: THEME.spacing.lg,
-    marginBottom: THEME.spacing.md,
+    padding: THEME.spacing.md,
     borderWidth: 1,
     borderColor: THEME.colors.border,
+    marginBottom: THEME.spacing.md,
+  },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  sectionHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  sectionHeaderText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: THEME.colors.textPrimary,
+  },
+  photoCountText: {
+    fontSize: 11,
+    color: THEME.colors.textSecondary,
+  },
+  photoGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  addPhotoCard: {
+    width: "48%",
+    aspectRatio: 4 / 5,
+    borderRadius: THEME.radius.md,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: THEME.colors.borderStrong,
+    backgroundColor: THEME.colors.surfaceSubtle,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  addPhotoIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: THEME.colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addPhotoText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: THEME.colors.textPrimary,
+  },
+  addPhotoSub: {
+    fontSize: 9,
+    color: THEME.colors.textSecondary,
+    letterSpacing: 0.5,
+  },
+  photoThumbnailCard: {
+    width: "48%",
+    aspectRatio: 4 / 5,
+    borderRadius: THEME.radius.md,
+    overflow: "hidden",
+    position: "relative",
+    backgroundColor: THEME.colors.surfaceSubtle,
+  },
+  photoImage: {
+    width: "100%",
+    height: "100%",
+  },
+  removePhotoBtn: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  photoCaptionOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 8,
+    backgroundColor: "rgba(17, 19, 26, 0.85)",
+  },
+  photoCaptionTag: {
+    fontSize: 8,
+    fontWeight: "700",
+    color: THEME.colors.accent,
+    letterSpacing: 0.8,
+  },
+  photoCaptionTitle: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: THEME.colors.textPrimary,
   },
   fieldLabel: {
     fontSize: 10,
     fontWeight: "700",
     color: THEME.colors.textTertiary,
-    letterSpacing: 1.1,
-    marginBottom: 8,
+    letterSpacing: 1,
+    marginBottom: 6,
+  },
+  moodStatusLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: THEME.colors.accent,
+  },
+  energyStatusLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: THEME.colors.accent,
   },
   headlineInput: {
-    backgroundColor: THEME.colors.surfaceSubtle,
-    borderWidth: 1,
-    borderColor: THEME.colors.border,
-    borderRadius: THEME.radius.md,
-    padding: 12,
+    fontSize: 17,
+    fontWeight: "700",
     color: THEME.colors.textPrimary,
-    fontSize: 16,
-    fontWeight: "600",
+    paddingVertical: 4,
   },
   bodyInput: {
-    backgroundColor: THEME.colors.surfaceSubtle,
-    borderWidth: 1,
-    borderColor: THEME.colors.border,
-    borderRadius: THEME.radius.md,
-    padding: 14,
+    fontSize: 14,
     color: THEME.colors.textPrimary,
-    fontSize: 15,
     lineHeight: 22,
-    minHeight: 140,
+    minHeight: 120,
   },
   bentoSection: {
     backgroundColor: THEME.colors.surfaceSubtle,
     borderRadius: THEME.radius.md,
-    padding: 12,
-    marginBottom: 10,
+    padding: 10,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: THEME.colors.borderSubtle,
   },
@@ -1100,128 +1603,169 @@ const styles = StyleSheet.create({
   bentoTitle: {
     fontSize: 12,
     fontWeight: "600",
-    color: THEME.colors.textSecondary,
+    color: THEME.colors.textPrimary,
   },
   bentoInput: {
-    color: THEME.colors.textPrimary,
     fontSize: 13,
+    color: THEME.colors.textPrimary,
     lineHeight: 18,
-    minHeight: 36,
+  },
+  calContextCard: {
+    backgroundColor: THEME.colors.surface,
+    borderRadius: THEME.radius.lg,
+    padding: THEME.spacing.md,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    marginBottom: THEME.spacing.md,
+  },
+  calContextHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 8,
+  },
+  calContextTitle: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: THEME.colors.sky,
+  },
+  calEventsList: {
+    gap: 6,
+  },
+  calEventRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: THEME.colors.surfaceSubtle,
+    padding: 8,
+    borderRadius: THEME.radius.md,
+    gap: 8,
+  },
+  calEventTimeBadge: {
+    backgroundColor: THEME.colors.surface,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: THEME.radius.sm,
+  },
+  calEventTimeText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: THEME.colors.textSecondary,
+  },
+  calEventTitle: {
+    flex: 1,
+    fontSize: 12,
+    color: THEME.colors.textPrimary,
+    fontWeight: "500",
   },
   tagsContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 12,
+    gap: 6,
+    marginBottom: 8,
   },
   addTagRow: {
     flexDirection: "row",
+    alignItems: "center",
     gap: 8,
+    marginTop: 4,
   },
   addTagInput: {
     flex: 1,
     backgroundColor: THEME.colors.surfaceSubtle,
-    borderWidth: 1,
-    borderColor: THEME.colors.border,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     borderRadius: THEME.radius.md,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
     color: THEME.colors.textPrimary,
-    fontSize: 13,
+    fontSize: 12,
   },
   addTagButton: {
     backgroundColor: THEME.colors.surfaceSubtle,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: THEME.radius.md,
     borderWidth: 1,
     borderColor: THEME.colors.border,
-    borderRadius: THEME.radius.md,
-    paddingHorizontal: 14,
-    justifyContent: "center",
-    alignItems: "center",
   },
   addTagButtonText: {
-    color: THEME.colors.textSecondary,
     fontSize: 12,
+    color: THEME.colors.accent,
     fontWeight: "600",
   },
   saveButton: {
     flexDirection: "row",
-    backgroundColor: THEME.colors.accent,
-    borderRadius: THEME.radius.md,
-    paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 4,
+    backgroundColor: THEME.colors.accent,
+    paddingVertical: 14,
+    borderRadius: THEME.radius.md,
+    marginTop: 8,
   },
   saveButtonDisabled: {
     opacity: 0.6,
   },
   saveButtonText: {
-    color: "#ffffff",
     fontSize: 15,
     fontWeight: "700",
-    letterSpacing: -0.2,
+    color: THEME.colors.textInverse,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    backgroundColor: "rgba(0, 0, 0, 0.75)",
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
+    padding: THEME.spacing.lg,
   },
   conflictCard: {
     backgroundColor: THEME.colors.surface,
-    borderRadius: THEME.radius.xl,
-    padding: 22,
-    maxWidth: 440,
-    width: "100%",
+    borderRadius: THEME.radius.lg,
+    padding: THEME.spacing.lg,
     borderWidth: 1,
     borderColor: THEME.colors.border,
+    maxWidth: 480,
+    width: "100%",
   },
-  conflictIconHeader: {
+  conflictTitleRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    marginBottom: 12,
+    gap: 8,
+    marginBottom: 10,
   },
   conflictTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "700",
     color: THEME.colors.textPrimary,
   },
   conflictBody: {
     fontSize: 13,
-    lineHeight: 20,
     color: THEME.colors.textSecondary,
-    marginBottom: 20,
+    lineHeight: 20,
+    marginBottom: 16,
   },
   conflictActions: {
-    flexDirection: "row",
-    gap: 10,
+    gap: 8,
   },
-  conflictButtonSecondary: {
-    flex: 1,
+  conflictBtnServer: {
     backgroundColor: THEME.colors.surfaceSubtle,
+    paddingVertical: 10,
+    borderRadius: THEME.radius.md,
+    alignItems: "center",
+  },
+  conflictBtnServerText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: THEME.colors.textPrimary,
+  },
+  conflictBtnLocal: {
+    backgroundColor: THEME.colors.roseMuted,
+    paddingVertical: 10,
+    borderRadius: THEME.radius.md,
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: THEME.colors.border,
-    borderRadius: THEME.radius.md,
-    paddingVertical: 10,
-    alignItems: "center",
+    borderColor: "rgba(244, 63, 94, 0.3)",
   },
-  conflictButtonSecondaryText: {
-    color: THEME.colors.textSecondary,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  conflictButtonPrimary: {
-    flex: 1,
-    backgroundColor: THEME.colors.accent,
-    borderRadius: THEME.radius.md,
-    paddingVertical: 10,
-    alignItems: "center",
-  },
-  conflictButtonPrimaryText: {
-    color: "#ffffff",
-    fontSize: 12,
-    fontWeight: "600",
+  conflictBtnLocalText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: THEME.colors.rose,
   },
 });

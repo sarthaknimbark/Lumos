@@ -7,10 +7,11 @@
 export const THEME = {
   colors: {
     // Canvas & Surfaces
-    background: "#0c0d12", // Deep OLED matte slate
-    surface: "#151720", // Elevated card surface
-    surfaceSubtle: "#1c1f2b", // Secondary card/input surface
-    surfaceHover: "#242838", // Hover / press state
+    background: "#11131a", // Stitch deep matte slate
+    surface: "#191b23", // Elevated card surface (container low)
+    surfaceSubtle: "#1d1f27", // Secondary container
+    surfaceContainerHigh: "#282a31", // High elevation
+    surfaceHover: "#33343c", // Hover / press state
 
     // Borders & Separators
     border: "rgba(255, 255, 255, 0.08)", // Crisp hairline border
@@ -18,26 +19,27 @@ export const THEME = {
     borderStrong: "rgba(255, 255, 255, 0.16)",
 
     // Typography
-    textPrimary: "#f8fafc", // High contrast white
-    textSecondary: "#94a3b8", // Muted slate
+    textPrimary: "#e2e2ec", // High contrast crisp light
+    textSecondary: "#908fa0", // Muted outline slate
     textTertiary: "#64748b", // Subtle metadata
     textInverse: "#0c0d12", // On top of solid accent
 
     // Accents & Actions
-    accent: "#6366f1", // Precision Iris
-    accentHover: "#4f46e5",
-    accentMuted: "rgba(99, 102, 241, 0.12)",
-    accentBorder: "rgba(99, 102, 241, 0.35)",
+    accent: "#c0c1ff", // Stitch Precision Iris
+    accentHover: "#8083ff",
+    accentMuted: "rgba(192, 193, 255, 0.12)",
+    accentBorder: "rgba(192, 193, 255, 0.35)",
 
     // Emotional / Status Tones (Theme-harmonized)
     emerald: "#10b981",
     emeraldMuted: "rgba(16, 185, 129, 0.12)",
     amber: "#f59e0b",
     amberMuted: "rgba(245, 158, 11, 0.12)",
-    rose: "#f43f5e",
+    rose: "#ffb2b7",
+    recordingRose: "#b50036",
     roseMuted: "rgba(244, 63, 94, 0.12)",
-    sky: "#0ea5e9",
-    skyMuted: "rgba(14, 165, 233, 0.12)",
+    sky: "#7bd0ff",
+    skyMuted: "rgba(123, 208, 255, 0.12)",
     purple: "#a855f7",
     purpleMuted: "rgba(168, 85, 247, 0.12)",
   },

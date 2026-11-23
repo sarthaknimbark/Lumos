@@ -80,6 +80,8 @@ export default function SearchScreen() {
               updatedAt: new Date().toISOString(),
             })),
             tags: m.tags,
+            audioNotes: [],
+            photos: [],
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           }));
